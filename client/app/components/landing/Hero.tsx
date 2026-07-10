@@ -85,89 +85,89 @@ export default function Hero() {
 
       </div>
 
-      {/* Floating schema preview decorations */}
-      <div className="absolute inset-0 pointer-events-none">
-        {/* Floating table card — left */}
-        <motion.div
-          className="absolute top-1/4 left-[8%] glass-card rounded-xl p-4 w-48 hidden lg:block"
-          initial={{ opacity: 0, x: -50 }}
-          animate={{ opacity: 0.6, x: 0 }}
-          transition={{ duration: 1.2, delay: 1 }}
-          style={{ animation: "float 6s ease-in-out infinite" }}
-        >
-          <div className="text-xs font-pixel text-stellar-strawberry mb-2">
-            USERS
-          </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-yellow-400">🔑</span>
-              <span className="text-siesta-tan/80">id</span>
-              <span className="text-grayzone/60 ml-auto">int</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-4" />
-              <span className="text-siesta-tan/80">email</span>
-              <span className="text-grayzone/60 ml-auto">varchar</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-4" />
-              <span className="text-siesta-tan/80">name</span>
-              <span className="text-grayzone/60 ml-auto">varchar</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Floating table card — right */}
-        <motion.div
-          className="absolute top-1/3 right-[8%] glass-card rounded-xl p-4 w-48 hidden lg:block"
-          initial={{ opacity: 0, x: 50 }}
-          animate={{ opacity: 0.6, x: 0 }}
-          transition={{ duration: 1.2, delay: 1.5 }}
+      {/* Funky Background Element: Dense Retro Arcade Clutter */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 1 }}>
+        {/* Retro Grid Overlay */}
+        <div 
+          className="absolute inset-0 opacity-20" 
           style={{
-            animation: "float 6s ease-in-out infinite",
-            animationDelay: "3s",
+            backgroundImage: `linear-gradient(rgba(0, 255, 255, 0.2) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 255, 0.2) 1px, transparent 1px)`,
+            backgroundSize: '40px 40px',
+            maskImage: "linear-gradient(to bottom, white 20%, transparent 80%)",
+            WebkitMaskImage: "linear-gradient(to bottom, white 20%, transparent 80%)"
           }}
-        >
-          <div className="text-xs font-pixel text-pico-eggplant mb-2">
-            ORDERS
+        ></div>
+
+        {/* --- Floating Pixel Crosses (+) --- */}
+        <motion.div className="absolute top-[10%] left-[8%] text-cyan-400 opacity-60" animate={{ y: [0, -10, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}>
+          <div className="relative w-8 h-8">
+            <div className="absolute top-1/2 left-0 w-full h-2 bg-current -translate-y-1/2"></div>
+            <div className="absolute left-1/2 top-0 w-2 h-full bg-current -translate-x-1/2"></div>
           </div>
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-yellow-400">🔑</span>
-              <span className="text-siesta-tan/80">id</span>
-              <span className="text-grayzone/60 ml-auto">int</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-blue-400">🔗</span>
-              <span className="text-siesta-tan/80">user_id</span>
-              <span className="text-grayzone/60 ml-auto">int</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-4" />
-              <span className="text-siesta-tan/80">total</span>
-              <span className="text-grayzone/60 ml-auto">decimal</span>
-            </div>
+        </motion.div>
+        
+        <motion.div className="absolute bottom-[20%] right-[12%] text-yellow-400 opacity-80" animate={{ y: [0, 15, 0], rotate: [0, 90, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}>
+          <div className="relative w-6 h-6">
+            <div className="absolute top-1/2 left-0 w-full h-1.5 bg-current -translate-y-1/2"></div>
+            <div className="absolute left-1/2 top-0 w-1.5 h-full bg-current -translate-x-1/2"></div>
           </div>
         </motion.div>
 
-        {/* Animated connection line between cards */}
-        <svg
-          className="absolute inset-0 w-full h-full hidden lg:block"
-          style={{ zIndex: 1 }}
-        >
-          <motion.line
-            x1="22%"
-            y1="38%"
-            x2="78%"
-            y2="42%"
-            stroke="#FF5C8D"
-            strokeWidth="1.5"
-            strokeDasharray="8 4"
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ pathLength: 1, opacity: 0.4 }}
-            transition={{ duration: 2, delay: 2 }}
-          />
-        </svg>
+        <motion.div className="absolute top-[30%] right-[20%] text-stellar-strawberry opacity-70" animate={{ y: [0, -8, 0], rotate: [0, -90, 0] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
+          <div className="relative w-10 h-10">
+            <div className="absolute top-1/2 left-0 w-full h-2.5 bg-current -translate-y-1/2"></div>
+            <div className="absolute left-1/2 top-0 w-2.5 h-full bg-current -translate-x-1/2"></div>
+          </div>
+        </motion.div>
+        
+        <motion.div className="absolute top-[70%] left-[25%] text-cyan-400 opacity-50" animate={{ y: [0, 12, 0] }} transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut", delay: 2 }}>
+          <div className="relative w-5 h-5">
+            <div className="absolute top-1/2 left-0 w-full h-1.5 bg-current -translate-y-1/2"></div>
+            <div className="absolute left-1/2 top-0 w-1.5 h-full bg-current -translate-x-1/2"></div>
+          </div>
+        </motion.div>
+
+        {/* --- Chunky Voxel Blocks & Shapes --- */}
+        <motion.div className="absolute top-[45%] left-[4%] w-12 h-12" animate={{ rotate: [0, 180, 360] }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}>
+          <div className="w-1/2 h-1/2 bg-cyan-400/80 absolute top-0 left-0"></div>
+          <div className="w-1/2 h-1/2 bg-cyan-400/80 absolute bottom-0 right-0"></div>
+        </motion.div>
+
+        <motion.div className="absolute bottom-[35%] left-[15%] w-8 h-8" animate={{ y: [0, -20, 0], rotate: [0, 45, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }}>
+          <div className="w-full h-full bg-yellow-400/90" style={{ clipPath: 'polygon(20% 0%, 80% 0%, 100% 20%, 100% 80%, 80% 100%, 20% 100%, 0% 80%, 0% 20%)' }}></div>
+        </motion.div>
+
+        <motion.div className="absolute top-[15%] right-[5%] w-16 h-16 bg-pico-eggplant/60" animate={{ scale: [1, 1.1, 1], rotate: [0, 45, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut", delay: 2 }} />
+        
+        <motion.div className="absolute top-[25%] left-[20%] w-6 h-6 bg-stellar-strawberry/80" animate={{ rotate: [0, 90, 0] }} transition={{ duration: 4, repeat: Infinity, ease: "easeInOut", delay: 1 }} />
+        
+        {/* --- Pixel Dots & Mini Accents --- */}
+        <motion.div className="absolute top-[35%] left-[30%] w-3 h-3 bg-yellow-400" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }} />
+        <motion.div className="absolute bottom-[40%] right-[25%] w-4 h-4 bg-cyan-400" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut", delay: 1 }} />
+        <motion.div className="absolute top-[60%] left-[12%] w-2 h-2 bg-stellar-strawberry" animate={{ opacity: [0.2, 1, 0.2] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut", delay: 0.5 }} />
+
+        {/* --- Outline Shapes --- */}
+        <motion.div className="absolute bottom-[10%] left-[8%] text-stellar-strawberry opacity-60" animate={{ y: [0, 15, 0] }} transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}>
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+             <polyline points="3 12 9 4 15 20 21 12" />
+          </svg>
+        </motion.div>
+
+        <motion.div className="absolute top-[50%] right-[3%] text-cyan-400 opacity-50" animate={{ y: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+             <circle cx="12" cy="12" r="10" strokeDasharray="4 4" />
+          </svg>
+        </motion.div>
+        
+        <motion.div className="absolute bottom-[40%] right-[18%] text-yellow-400 opacity-40" animate={{ rotate: [0, -360] }} transition={{ duration: 15, repeat: Infinity, ease: "linear" }}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+             <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+          </svg>
+        </motion.div>
+        
+        {/* --- Radial Glows to make it pop like the poster --- */}
+        <div className="absolute top-[-10%] right-[-10%] w-[500px] h-[500px] bg-fuchsia-600/10 rounded-full blur-[120px]"></div>
+        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-cyan-600/5 rounded-full blur-[120px]"></div>
       </div>
 
       {/* Main content */}
