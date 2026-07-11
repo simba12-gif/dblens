@@ -142,8 +142,12 @@ function parseWithAst(sql: string): SchemaGraph {
           if (ctype.includes('PRIMARY')) {
             const keyCols: any[] = def.definition ?? def.columns ?? [];
             for (const kc of keyCols) {
-              const colName = typeof kc === 'string' ? stripQuotes(kc) : stripQuotes(kc.column ?? kc.expr?.column ?? '');
-              if (colName) pkColumns.add(colName.toLowerCase());
+              let rawCol = kc;
+              if (typeof kc !== 'string') {
+                rawCol = kc.column?.expr?.value ?? kc.column?.expr?.column ?? kc.column ?? kc.expr?.column ?? '';
+              }
+              const colName = stripQuotes(String(rawCol));
+              if (colName && colName !== '[object Object]') pkColumns.add(colName.toLowerCase());
             }
           }
 
@@ -153,8 +157,17 @@ function parseWithAst(sql: string): SchemaGraph {
             const refCols: any[] = def.reference_definition?.definition ?? def.reference?.columns ?? [];
 
             for (let i = 0; i < fkCols.length; i++) {
-              const srcCol = typeof fkCols[i] === 'string' ? stripQuotes(fkCols[i]) : stripQuotes(fkCols[i].column ?? fkCols[i].expr?.column ?? '');
-              const tgtCol = refCols[i] != null ? typeof refCols[i] === 'string' ? stripQuotes(refCols[i]) : stripQuotes(refCols[i].column ?? refCols[i].expr?.column ?? '') : srcCol;
+              let rawSrc = fkCols[i];
+              if (typeof fkCols[i] !== 'string') {
+                rawSrc = fkCols[i].column?.expr?.value ?? fkCols[i].column?.expr?.column ?? fkCols[i].column ?? fkCols[i].expr?.column ?? '';
+              }
+              const srcCol = stripQuotes(String(rawSrc));
+
+              let rawTgt = refCols[i];
+              if (refCols[i] != null && typeof refCols[i] !== 'string') {
+                rawTgt = refCols[i].column?.expr?.value ?? refCols[i].column?.expr?.column ?? refCols[i].column ?? refCols[i].expr?.column ?? '';
+              }
+              const tgtCol = refCols[i] != null ? stripQuotes(String(rawTgt)) : srcCol;
 
               if (srcCol && refTable) {
                 edges.push({
@@ -171,7 +184,13 @@ function parseWithAst(sql: string): SchemaGraph {
           
           if (ctype.includes('UNIQUE')) {
             const uqCols: any[] = def.definition ?? def.columns ?? [];
-            const cols = uqCols.map((kc: any) => typeof kc === 'string' ? stripQuotes(kc) : stripQuotes(kc.column ?? kc.expr?.column ?? ''));
+            const cols = uqCols.map((kc: any) => {
+              let rawCol = kc;
+              if (typeof kc !== 'string') {
+                rawCol = kc.column?.expr?.value ?? kc.column?.expr?.column ?? kc.column ?? kc.expr?.column ?? '';
+              }
+              return stripQuotes(String(rawCol));
+            }).filter(c => c && c !== '[object Object]');
             tableIndexes.push({ name: def.constraint ?? `uq_${tableName}_${cols.join('_')}`, columns: cols, unique: true });
           }
         }
@@ -180,7 +199,7 @@ function parseWithAst(sql: string): SchemaGraph {
       for (const def of definitions) {
         if (def.resource === 'constraint' || def.constraint_type) continue;
 
-        const colName = stripQuotes(def.column?.column ?? def.column ?? '');
+        const colName = stripQuotes(typeof def.column?.column === 'string' ? def.column.column : typeof def.column === 'string' ? def.column : String(def.column?.column?.expr?.value ?? def.column?.expr?.value ?? def.column?.column ?? def.column ?? ''));
         if (!colName) continue;
 
         const dataType = normaliseType(def.definition?.dataType ?? def.dataType ?? def.definition?.type ?? '');
@@ -192,13 +211,19 @@ function parseWithAst(sql: string): SchemaGraph {
         const inlineConstraints: any[] = def.nullable ?? def.constraint ?? def.definition?.constraint ?? [];
         const constraintArr = Array.isArray(inlineConstraints) ? inlineConstraints : [inlineConstraints];
 
+        if (def.primary_key === 'primary key') {
+          isPK = true;
+        }
+
         for (const c of constraintArr) {
           if (!c) continue;
           const cVal = typeof c === 'string' ? c.toUpperCase() : '';
           const cType = typeof c === 'object' ? (c.type ?? c.constraint_type ?? '').toString().toUpperCase() : cVal;
 
           if (cType.includes('NOT NULL') || cVal === 'NOT NULL') nullable = false;
-          if (cType.includes('PRIMARY')) isPK = true;
+          if (cType.includes('PRIMARY')) {
+            isPK = true;
+          }
           if (cType.includes('UNIQUE')) {
             tableIndexes.push({ name: `uq_${tableName}_${colName}`, columns: [colName], unique: true });
           }
@@ -227,6 +252,8 @@ function parseWithAst(sql: string): SchemaGraph {
           }
         }
 
+        if (isPK) pkColumns.add(colName.toLowerCase());
+
         columns.push({
           name: colName,
           type: dataType,
@@ -236,6 +263,13 @@ function parseWithAst(sql: string): SchemaGraph {
           defaultValue,
           references,
         });
+      }
+
+      for (const col of columns) {
+        if (pkColumns.has(col.name.toLowerCase())) {
+          col.isPrimaryKey = true;
+          col.nullable = false;
+        }
       }
 
       tables.set(tableName, { id: tableId, name: tableName, columns, indexes: tableIndexes });
@@ -264,14 +298,24 @@ function parseWithAst(sql: string): SchemaGraph {
       
       for (const expr of exprs) {
         if (!expr) continue;
-        if (expr.action === 'add' && (expr.constraint_type === 'foreign key' || expr.constraint_type === 'FOREIGN KEY' || expr.resource === 'constraint')) {
-          const fkCols = expr.definition ?? expr.columns ?? [];
-          const refTable = stripQuotes(expr.reference_definition?.table?.[0]?.table ?? expr.reference?.table ?? '');
-          const refCols = expr.reference_definition?.definition ?? expr.reference?.columns ?? [];
+        if (expr.action === 'add' && (expr.constraint_type === 'foreign key' || expr.constraint_type === 'FOREIGN KEY' || expr.resource === 'constraint' || expr.create_definitions?.constraint_type?.toUpperCase().includes('FOREIGN'))) {
+          const fkDef = expr.create_definitions ?? expr;
+          const fkCols = fkDef.definition ?? fkDef.columns ?? [];
+          const refTable = stripQuotes(fkDef.reference_definition?.table?.[0]?.table ?? fkDef.reference?.table ?? '');
+          const refCols = fkDef.reference_definition?.definition ?? fkDef.reference?.columns ?? [];
 
           for (let i = 0; i < fkCols.length; i++) {
-            const srcCol = typeof fkCols[i] === 'string' ? stripQuotes(fkCols[i]) : stripQuotes(fkCols[i].column ?? fkCols[i].expr?.column ?? '');
-            const tgtCol = refCols[i] != null ? typeof refCols[i] === 'string' ? stripQuotes(refCols[i]) : stripQuotes(refCols[i].column ?? refCols[i].expr?.column ?? '') : srcCol;
+            let rawSrc = fkCols[i];
+            if (typeof fkCols[i] !== 'string') {
+              rawSrc = fkCols[i].column?.expr?.value ?? fkCols[i].column?.expr?.column ?? fkCols[i].column ?? fkCols[i].expr?.column ?? '';
+            }
+            const srcCol = stripQuotes(String(rawSrc));
+
+            let rawTgt = refCols[i];
+            if (refCols[i] != null && typeof refCols[i] !== 'string') {
+              rawTgt = refCols[i].column?.expr?.value ?? refCols[i].column?.expr?.column ?? refCols[i].column ?? refCols[i].expr?.column ?? '';
+            }
+            const tgtCol = refCols[i] != null ? stripQuotes(String(rawTgt)) : srcCol;
 
             if (srcCol && refTable) {
               edges.push({
@@ -424,6 +468,13 @@ function parseWithRegex(sql: string): SchemaGraph {
         defaultValue,
         references,
       });
+    }
+
+    for (const col of columns) {
+      if (pkColumns.has(col.name.toLowerCase())) {
+        col.isPrimaryKey = true;
+        col.nullable = false;
+      }
     }
 
     tables.push({ id: tableId, name: tableName, columns, indexes });

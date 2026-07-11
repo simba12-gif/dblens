@@ -114,6 +114,53 @@ runTest('Insights Analyzer: generates correct centrality and hints', () => {
   // user_id in posts is FK without index
   const missingIndexHints = insights.optimizationHints.filter(h => h.type === 'missing-index');
   if (missingIndexHints.length === 0) throw new Error('Expected missing-index hints for unindexed FKs');
+
+  const noPkOnUsers = insights.optimizationHints.find(
+    h => h.type === 'no-primary-key' && h.tableName === 'users'
+  );
+  if (noPkOnUsers !== undefined) {
+    throw new Error('no-primary-key hint should NOT fire for users (has inline SERIAL PRIMARY KEY)');
+  }
 });
+
+// Test: composite PK detection
+const compositePkSql = `
+CREATE TABLE post_tags (
+  post_id INT NOT NULL,
+  tag_id  INT NOT NULL,
+  PRIMARY KEY (post_id, tag_id)
+);
+ALTER TABLE post_tags ADD CONSTRAINT fk_pt_post FOREIGN KEY (post_id) REFERENCES posts(id);
+ALTER TABLE post_tags ADD CONSTRAINT fk_pt_tag  FOREIGN KEY (tag_id)  REFERENCES tags(id);
+`;
+
+// Note: posts and tags don't need to exist for the parser to build the edges.
+// We only care about post_tags itself.
+
+const compositePkGraph = parseSql(compositePkSql);
+const postTagsTable = compositePkGraph.tables.find(t => t.name === 'post_tags');
+
+console.assert(postTagsTable !== undefined, 'post_tags table should exist');
+console.assert(
+  postTagsTable?.columns.every(c => c.isPrimaryKey),
+  'All post_tags columns should have isPrimaryKey: true'
+);
+console.assert(
+  postTagsTable?.columns.every(c => c.isForeignKey),
+  'All post_tags columns should have isForeignKey: true'
+);
+
+const insights = generateInsights(compositePkGraph);
+const noPkHint = insights.optimizationHints.find(
+  h => h.type === 'no-primary-key' && h.tableName === 'post_tags'
+);
+console.assert(noPkHint === undefined, 'no-primary-key hint should NOT fire for post_tags');
+
+const missingIndexHint = insights.optimizationHints.find(
+  h => h.type === 'missing-index' && h.tableName === 'post_tags'
+);
+console.assert(missingIndexHint === undefined, 'missing-index hint should NOT fire for PK columns');
+
+console.log('✓ Composite PK tests passed');
 
 console.log('\nAll tests passed successfully!');

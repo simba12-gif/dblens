@@ -1,41 +1,8 @@
+import { SchemaGraph, InsightsReport } from './types';
+
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
-export interface SchemaGraph {
-  tables: {
-    id: string;
-    name: string;
-    columns: {
-      name: string;
-      type: string;
-      nullable: boolean;
-      isPrimaryKey: boolean;
-      isForeignKey: boolean;
-      defaultValue?: string;
-      references?: { table: string; column: string };
-    }[];
-    indexes: {
-      name: string;
-      columns: string[];
-      unique: boolean;
-    }[];
-  }[];
-  edges: {
-    id: string;
-    source: string;
-    target: string;
-    sourceColumn: string;
-    targetColumn: string;
-    type: "one-to-one" | "one-to-many" | "many-to-many";
-  }[];
-  metadata: {
-    tableCount: number;
-    columnCount: number;
-    relationshipCount: number;
-    parseTimeMs: number;
-  };
-}
-
-interface ApiResponse<T> {
+export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: {
@@ -84,6 +51,20 @@ export async function uploadSchemaFile(
   const res = await fetch(`${API_BASE}/schema/parse`, {
     method: "POST",
     body: formData,
+  });
+  return res.json();
+}
+
+/**
+ * Generate insights for a parsed schema graph.
+ */
+export async function fetchInsights(
+  graph: SchemaGraph
+): Promise<ApiResponse<InsightsReport>> {
+  const res = await fetch(`${API_BASE}/schema/insights`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(graph),
   });
   return res.json();
 }

@@ -95,10 +95,9 @@ export function generateInsights(graph: SchemaGraph): InsightsReport {
         }
         
         // Check if there is an index that covers this FK (i.e. starts with this column)
-        const hasIndex = table.indexes.some(idx => idx.columns.length > 0 && idx.columns[0] === column.name);
-        const isCoveredByPk = column.isPrimaryKey;
+        const isIndexed = table.indexes.some(idx => idx.columns.length > 0 && idx.columns[0] === column.name);
         
-        if (!hasIndex && !isCoveredByPk) {
+        if (column.isForeignKey && !column.isPrimaryKey && !isIndexed) {
           optimizationHints.push({
             type: 'missing-index',
             tableId: table.id,
