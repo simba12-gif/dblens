@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import FlipCard from "./FlipCard";
 
 const steps = [
   {
@@ -8,6 +9,7 @@ const steps = [
     title: "Upload",
     description:
       "Drop a .sql file or paste your DDL directly. We support MySQL, PostgreSQL, and JSON schema formats.",
+    tags: ["MySQL", "PostgreSQL", "JSON"],
     icon: (
       <svg
         width="28"
@@ -30,6 +32,7 @@ const steps = [
     title: "Parse",
     description:
       "Our engine extracts every table, column, data type, primary key, and foreign key relationship in under a second.",
+    tags: ["Tables", "Keys", "Relations"],
     icon: (
       <svg
         width="28"
@@ -52,6 +55,7 @@ const steps = [
     title: "Explore",
     description:
       "Interact with a beautiful ER diagram. Click tables to highlight relationships. Drag to rearrange. Discover insights.",
+    tags: ["Drag", "Zoom", "Click"],
     icon: (
       <svg
         width="28"
@@ -133,55 +137,10 @@ export default function HowItWorks() {
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-12 md:gap-8 items-center">
             {steps.map((step, index) => (
-              <motion.div
-                key={step.number}
-                variants={stepVariants}
-                className="relative flex flex-col items-center text-center"
-              >
-                {/* Step circle */}
-                <div className="relative mb-6">
-                  <motion.div
-                    className="w-20 h-20 rounded-2xl glass-card flex items-center justify-center text-stellar-strawberry"
-                    whileHover={{
-                      boxShadow:
-                        "0 0 30px rgba(255, 92, 141, 0.3), 0 0 60px rgba(255, 92, 141, 0.1)",
-                    }}
-                  >
-                    {step.icon}
-                  </motion.div>
-                  {/* Number badge */}
-                  <div className="absolute -top-2 -right-2 w-8 h-8 rounded-lg bg-stellar-strawberry flex items-center justify-center">
-                    <span className="font-pixel text-[10px] text-white">
-                      {step.number}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Content */}
-                <h3 className="font-pixel text-sm text-siesta-tan mb-3">
-                  {step.title.toUpperCase()}
-                </h3>
-                <p className="text-grayzone text-sm leading-relaxed max-w-xs">
-                  {step.description}
-                </p>
-
-                {/* Mobile connector arrow */}
-                {index < steps.length - 1 && (
-                  <div className="md:hidden mt-8 text-stellar-strawberry/40">
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M12 5v14M5 12l7 7 7-7" />
-                    </svg>
-                  </div>
-                )}
+              <motion.div key={step.number} variants={stepVariants} className="w-full flex justify-center">
+                <FlipCard step={step} index={index} total={steps.length} />
               </motion.div>
             ))}
           </div>
