@@ -4,6 +4,8 @@ import { parseSql } from '../parsers/sqlParser';
 import { parseJsonSchema } from '../parsers/jsonParser';
 import { ParseError, SchemaGraph } from '../types/schema';
 
+import { generateInsights } from '../analyzers/insights';
+
 // ---------------------------------------------------------------------------
 // Multer config – memory storage, 5 MB limit
 // ---------------------------------------------------------------------------
@@ -140,6 +142,38 @@ router.post(
     }
   },
 );
+
+/**
+ * POST /insights
+ *
+ * Accepts a parsed SchemaGraph and returns an InsightsReport.
+ */
+router.post('/insights', (req: Request, res: Response) => {
+  try {
+    const graph = req.body as SchemaGraph;
+    if (!graph || !Array.isArray(graph.tables) || !Array.isArray(graph.edges)) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: 'Invalid SchemaGraph provided.',
+          suggestion: 'Ensure the request body contains a valid SchemaGraph object.',
+        } satisfies ParseError,
+      });
+    }
+
+    const insights = generateInsights(graph);
+    return res.json({ success: true, data: insights });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An unexpected error occurred during insights generation.';
+    return res.status(400).json({
+      success: false,
+      error: {
+        message,
+        suggestion: 'Check the structure of the provided SchemaGraph.',
+      } satisfies ParseError,
+    });
+  }
+});
 
 function isParseError(err: unknown): err is ParseError {
   return (

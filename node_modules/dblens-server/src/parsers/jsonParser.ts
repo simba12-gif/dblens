@@ -26,6 +26,7 @@ interface RawColumn {
 interface RawTable {
   name?: unknown;
   columns?: unknown;
+  fields?: unknown; // Prisma fallback
   indexes?: unknown;
 }
 
@@ -37,6 +38,7 @@ interface RawRelationship {
 
 interface RawSchema {
   tables?: unknown;
+  models?: unknown; // Prisma fallback
   relationships?: unknown;
 }
 
@@ -52,6 +54,36 @@ function assertString(value: unknown, fieldPath: string): string {
 
 function makeError(message: string, suggestion?: string): ParseError {
   return { message, suggestion };
+}
+
+function computeMetadataStats(tables: TableNode[], edges: RelationshipEdge[]) {
+  const incoming = new Map<string, number>();
+  const outgoing = new Map<string, number>();
+
+  for (const table of tables) {
+    incoming.set(table.name, 0);
+    outgoing.set(table.name, 0);
+  }
+
+  for (const edge of edges) {
+    if (outgoing.has(edge.source)) outgoing.set(edge.source, outgoing.get(edge.source)! + 1);
+    if (incoming.has(edge.target)) incoming.set(edge.target, incoming.get(edge.target)! + 1);
+  }
+
+  let mostConnectedTable: string | null = null;
+  let maxEdges = -1;
+  let orphans = 0;
+
+  for (const table of tables) {
+    const total = (incoming.get(table.name) || 0) + (outgoing.get(table.name) || 0);
+    if (total === 0) orphans++;
+    if (total > maxEdges) {
+      maxEdges = total;
+      mostConnectedTable = table.id;
+    }
+  }
+
+  return { orphanTableCount: orphans, mostConnectedTable: maxEdges > 0 ? mostConnectedTable : null };
 }
 
 // ---------------------------------------------------------------------------
@@ -85,7 +117,12 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
     );
   }
 
-  // --- Tables -----------------------------------------------------------
+  // Handle Prisma format internally by converting `models` to `tables`
+  let isPrisma = false;
+  if (Array.isArray(raw.models) && !raw.tables) {
+    isPrisma = true;
+    raw.tables = raw.models;
+  }
 
   if (!Array.isArray(raw.tables)) {
     throw makeError(
@@ -106,7 +143,7 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
 
   for (let ti = 0; ti < (raw.tables as RawTable[]).length; ti++) {
     const rawTable = (raw.tables as RawTable[])[ti];
-    const pathPrefix = `tables[${ti}]`;
+    const pathPrefix = isPrisma ? `models[${ti}]` : `tables[${ti}]`;
 
     if (typeof rawTable !== 'object' || rawTable === null || Array.isArray(rawTable)) {
       throw makeError(
@@ -125,14 +162,20 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
     }
     tableNames.add(tableName.toLowerCase());
 
-    if (!Array.isArray(rawTable.columns)) {
+    // Prisma fallback: fields -> columns
+    let rawCols = rawTable.columns;
+    if (isPrisma && rawTable.fields) {
+      rawCols = rawTable.fields;
+    }
+
+    if (!Array.isArray(rawCols)) {
       throw makeError(
         `${pathPrefix}.columns must be an array.`,
         `Provide columns for table "${tableName}".`,
       );
     }
 
-    if ((rawTable.columns as RawColumn[]).length === 0) {
+    if (rawCols.length === 0) {
       throw makeError(
         `${pathPrefix}.columns is empty.`,
         `Table "${tableName}" must have at least one column.`,
@@ -142,8 +185,8 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
     const columns: Column[] = [];
     const colNames = new Set<string>();
 
-    for (let ci = 0; ci < (rawTable.columns as RawColumn[]).length; ci++) {
-      const rawCol = (rawTable.columns as RawColumn[])[ci];
+    for (let ci = 0; ci < (rawCols as RawColumn[]).length; ci++) {
+      const rawCol = (rawCols as RawColumn[])[ci];
       const colPath = `${pathPrefix}.columns[${ci}]`;
 
       if (typeof rawCol !== 'object' || rawCol === null || Array.isArray(rawCol)) {
@@ -164,9 +207,8 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
       }
       colNames.add(colName.toLowerCase());
 
-      const isPrimaryKey = rawCol.primaryKey === true || rawCol.primary_key === true;
-      const nullable =
-        rawCol.nullable === false || isPrimaryKey ? false : true;
+      const isPrimaryKey = rawCol.primaryKey === true || rawCol.primary_key === true || colType.includes('@id');
+      const nullable = rawCol.nullable === false || isPrimaryKey ? false : true;
       const isForeignKey = rawCol.foreignKey === true || rawCol.foreign_key === true;
 
       let defaultValue: string | undefined;
@@ -188,7 +230,7 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
 
       columns.push({
         name: colName,
-        type: colType.toUpperCase(),
+        type: colType.replace(/@id|@default\([^)]*\)|@relation\([^)]*\)/g, '').trim().toUpperCase(),
         nullable,
         isPrimaryKey,
         isForeignKey: isForeignKey || !!references,
@@ -223,6 +265,55 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
   // --- Relationships ----------------------------------------------------
 
   const edges: RelationshipEdge[] = [];
+
+  // Prisma relation inference (if no explicit relationships array)
+  if (isPrisma && !raw.relationships) {
+    // Note: skipping many-to-many through tables and self-referential relations gracefully
+    for (let ti = 0; ti < (raw.tables as RawTable[]).length; ti++) {
+      const rawTable = (raw.tables as RawTable[])[ti];
+      const tableName = String(rawTable.name);
+      const fields = (rawTable.fields as RawColumn[]) || [];
+
+      for (const field of fields) {
+        const fieldType = String(field.type || '');
+        const targetModel = Array.from(tableNames).find(t => t.toLowerCase() === fieldType.split(' ')[0].toLowerCase());
+        
+        if (targetModel && targetModel.toLowerCase() !== tableName.toLowerCase()) {
+          // It's a relation to another model
+          let srcCol = `${targetModel.toLowerCase()}_id`;
+          let tgtCol = 'id';
+          
+          // Parse @relation(fields: [authorId], references: [id])
+          const relMatch = fieldType.match(/@relation\s*\(\s*fields:\s*\[([^\]]+)\],\s*references:\s*\[([^\]]+)\]\)/i);
+          if (relMatch) {
+            srcCol = relMatch[1].trim();
+            tgtCol = relMatch[2].trim();
+          }
+
+          const edgeId = `edge_${tableName}_${srcCol}_to_${targetModel}_${tgtCol}`.toLowerCase();
+          
+          edges.push({
+            id: edgeId,
+            source: tableName,
+            target: targetModel,
+            sourceColumn: srcCol,
+            targetColumn: tgtCol,
+            type: 'one-to-many',
+          });
+
+          // Mark FK on source
+          const srcTbl = tables.find(t => t.name.toLowerCase() === tableName.toLowerCase());
+          if (srcTbl) {
+            const sc = srcTbl.columns.find(c => c.name.toLowerCase() === srcCol.toLowerCase());
+            if (sc) {
+              sc.isForeignKey = true;
+              sc.references = { table: targetModel, column: tgtCol };
+            }
+          }
+        }
+      }
+    }
+  }
 
   if (raw.relationships !== undefined) {
     if (!Array.isArray(raw.relationships)) {
@@ -309,6 +400,7 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
 
   const totalColumns = tables.reduce((s, t) => s + t.columns.length, 0);
   const elapsed = performance.now() - start;
+  const stats = computeMetadataStats(tables, edges);
 
   return {
     tables,
@@ -318,6 +410,8 @@ export function parseJsonSchema(jsonContent: string): SchemaGraph {
       columnCount: totalColumns,
       relationshipCount: edges.length,
       parseTimeMs: Math.round(elapsed * 100) / 100,
+      orphanTableCount: stats.orphanTableCount,
+      mostConnectedTable: stats.mostConnectedTable,
     },
   };
 }
