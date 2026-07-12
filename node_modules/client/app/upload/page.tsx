@@ -9,9 +9,10 @@ import {
   parseSqlContent,
   parseJsonContent,
   uploadSchemaFile,
+  connectDatabase,
 } from "../lib/api";
 
-type Tab = "file" | "paste";
+type Tab = "file" | "paste" | "connect";
 type PasteFormat = "sql" | "json";
 
 export default function UploadPage() {
@@ -20,6 +21,7 @@ export default function UploadPage() {
   const [activeTab, setActiveTab] = useState<Tab>("file");
   const [pasteFormat, setPasteFormat] = useState<PasteFormat>("sql");
   const [pasteContent, setPasteContent] = useState("");
+  const [connectionString, setConnectionString] = useState("");
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -65,12 +67,15 @@ export default function UploadPage() {
       if (activeTab === "file") {
         if (!selectedFile) return;
         res = await uploadSchemaFile(selectedFile);
-      } else {
+      } else if (activeTab === "paste") {
         if (!pasteContent.trim()) return;
         res =
           pasteFormat === "sql"
             ? await parseSqlContent(pasteContent)
             : await parseJsonContent(pasteContent);
+      } else if (activeTab === "connect") {
+        if (!connectionString.trim()) return;
+        res = await connectDatabase(connectionString);
       }
 
       if (res.success && res.data) {
@@ -119,6 +124,16 @@ export default function UploadPage() {
               }}
             >
               PASTE SQL / JSON
+            </PixelButton>
+            <PixelButton
+              variant={activeTab === "connect" ? "primary" : "secondary"}
+              size="md"
+              onClick={() => {
+                setActiveTab("connect");
+                setError(null);
+              }}
+            >
+              CONNECT DB
             </PixelButton>
           </div>
 
@@ -212,6 +227,44 @@ export default function UploadPage() {
               </div>
             )}
 
+            {/* Connect Tab */}
+            {activeTab === "connect" && (
+              <div className="flex flex-col gap-4 animate-fade-in">
+                {/* Connection string input */}
+                <div className="flex flex-col gap-2">
+                  <label className="font-pixel text-[9px] text-grayzone uppercase">
+                    PostgreSQL Connection String
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full glass p-4 border border-grayzone/30 rounded-xl font-mono text-sm text-siesta-tan focus:outline-none focus:border-stellar-strawberry focus:ring-1 focus:ring-stellar-strawberry transition-all bg-transparent"
+                    placeholder="postgresql://user:password@host:5432/database"
+                    value={connectionString}
+                    onChange={(e) => setConnectionString(e.target.value)}
+                    disabled={isParsing}
+                    spellCheck={false}
+                    autoComplete="off"
+                  />
+                </div>
+
+                {/* Format hint */}
+                <div className="glass rounded-lg px-4 py-3 border border-grayzone/20">
+                  <p className="font-pixel text-[8px] text-grayzone mb-2 uppercase">Format</p>
+                  <p className="font-mono text-[10px] text-stellar-strawberry">
+                    postgresql://[user]:[password]@[host]:[port]/[database]
+                  </p>
+                  <p className="text-grayzone text-[10px] mt-2">
+                    Only PostgreSQL is supported. Your credentials are never stored.
+                  </p>
+                </div>
+
+                {/* SSL note */}
+                <p className="text-grayzone text-[10px] text-center">
+                  🔒 Connection is established server-side. SSL is enabled with self-signed cert support.
+                </p>
+              </div>
+            )}
+
             {/* Error State */}
             {error && (
               <GlassCard className="mt-6 border-pico-eggplant animate-slide-up" glow>
@@ -233,10 +286,10 @@ export default function UploadPage() {
               {isParsing ? (
                 <div className="flex flex-col items-center gap-3">
                   <p className="font-pixel text-stellar-strawberry text-lg animate-neon-flicker">
-                    PARSING...
+                    {activeTab === "connect" ? "CONNECTING..." : "PARSING..."}
                   </p>
                   <p className="text-grayzone text-xs">
-                    Extracting tables, columns, and relationships...
+                    {activeTab === "connect" ? "Introspecting live schema..." : "Extracting tables, columns, and relationships..."}
                   </p>
                 </div>
               ) : (
@@ -247,7 +300,8 @@ export default function UploadPage() {
                     onClick={handleParse}
                     disabled={
                       (activeTab === "file" && !selectedFile) ||
-                      (activeTab === "paste" && !pasteContent.trim())
+                      (activeTab === "paste" && !pasteContent.trim()) ||
+                      (activeTab === "connect" && !connectionString.trim())
                     }
                   >
                     PARSE SCHEMA →

@@ -1,7 +1,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import schemaRouter from './routes/schema';
-
+import dbRouter from './routes/db';
 // ---------------------------------------------------------------------------
 // App setup
 // ---------------------------------------------------------------------------
@@ -37,6 +37,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // Schema routes
 app.use('/api/schema', schemaRouter);
+app.use('/api/db', dbRouter);
 
 // ---------------------------------------------------------------------------
 // Global error handler

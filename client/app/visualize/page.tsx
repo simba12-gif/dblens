@@ -255,6 +255,15 @@ function VisualizeCanvas() {
         <MiniMap nodeColor="#732553" maskColor="rgba(20, 32, 48, 0.8)" style={{ backgroundColor: '#142030', border: '1px solid rgba(133, 163, 178, 0.2)' }} />
       </ReactFlow>
 
+      {graphData && graphData.tables.length === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
+          <p className="font-pixel text-[12px] text-grayzone mb-3">NO TABLES FOUND</p>
+          <p className="text-grayzone text-xs text-center max-w-xs">
+            The connected database has no tables in the public schema yet.
+          </p>
+        </div>
+      )}
+
       <InsightsPanel insights={insights} />
       
       <CanvasControls 

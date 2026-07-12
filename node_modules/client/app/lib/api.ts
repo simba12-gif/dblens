@@ -70,6 +70,20 @@ export async function fetchInsights(
 }
 
 /**
+ * Connect to a live PostgreSQL database and get the schema graph.
+ */
+export async function connectDatabase(
+  connectionString: string
+): Promise<ApiResponse<SchemaGraph>> {
+  const res = await fetch(`${API_BASE}/db/connect`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ connectionString }),
+  });
+  return res.json();
+}
+
+/**
  * Health check the server.
  */
 export async function checkHealth(): Promise<{ status: string }> {
