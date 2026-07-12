@@ -93,7 +93,7 @@ export default function UploadPage() {
 
   return (
     <main className="min-h-screen bg-hei-se bg-grid relative flex flex-col">
-      <Navbar />
+      <Navbar hideCta />
 
       <div className="flex-grow flex items-center justify-center p-6">
         <div className="w-full max-w-[560px] animate-fade-in">

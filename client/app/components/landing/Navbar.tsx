@@ -5,12 +5,16 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import PixelButton from "../ui/PixelButton";
 
-export default function Navbar() {
+export default function Navbar({ hideCta = false }: { hideCta?: boolean } = {}) {
   const [scrolled, setScrolled] = useState(false);
+  const [showCta, setShowCta] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
-    window.addEventListener("scroll", handleScroll);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+      setShowCta(window.scrollY > window.innerHeight * 0.8);
+    };
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
@@ -105,22 +109,26 @@ export default function Navbar() {
 
         {/* CTA — right */}
         <div className="flex items-center gap-3">
-          <PixelButton href="/upload" variant="primary" size="sm" icon={
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M5 12h14M12 5l7 7-7 7" />
-            </svg>
-          }>
-            Launch App
-          </PixelButton>
+          {!hideCta && (
+            <div className={`transition-all duration-300 ${showCta ? 'opacity-100 translate-y-0 pointer-events-auto' : 'opacity-0 -translate-y-2 pointer-events-none'}`}>
+              <PixelButton href="/upload" variant="primary" size="sm" icon={
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14M12 5l7 7-7 7" />
+                </svg>
+              }>
+                Launch App
+              </PixelButton>
+            </div>
+          )}
         </div>
       </div>
     </motion.nav>

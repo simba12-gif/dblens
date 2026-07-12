@@ -7,9 +7,10 @@ interface CanvasControlsProps {
   onFitView: () => void;
   onResetLayout: () => void;
   graphJson: string;
+  onNewSchema: () => void;
 }
 
-export default function CanvasControls({ onFitView, onResetLayout, graphJson }: CanvasControlsProps) {
+export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema }: CanvasControlsProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -34,6 +35,10 @@ export default function CanvasControls({ onFitView, onResetLayout, graphJson }: 
       <div className="w-px h-6 bg-grayzone/20"></div>
       <PixelButton variant="secondary" size="sm" onClick={handleCopy}>
         {copied ? "COPIED!" : "COPY JSON"}
+      </PixelButton>
+      <div className="w-px h-6 bg-grayzone/20"></div>
+      <PixelButton variant="primary" size="sm" onClick={onNewSchema}>
+        NEW SCHEMA
       </PixelButton>
     </div>
   );

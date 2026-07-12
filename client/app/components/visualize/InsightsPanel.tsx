@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { InsightsReport } from "../../../lib/types";
 import GlassCard from "../ui/GlassCard";
 import PixelButton from "../ui/PixelButton";
@@ -11,18 +12,36 @@ interface InsightsPanelProps {
 
 export default function InsightsPanel({ insights }: InsightsPanelProps) {
   const [isOpen, setIsOpen] = useState(true);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+
+  const toggleGroup = (type: string) => {
+    setOpenGroups(prev => {
+      const next = new Set(prev);
+      next.has(type) ? next.delete(type) : next.add(type);
+      return next;
+    });
+  };
 
   if (!insights) {
     return (
-      <div className="fixed right-4 top-16 bottom-4 w-[280px] glass-strong rounded-xl p-4 flex flex-col gap-4 z-10 transition-transform duration-300">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="font-pixel text-xs text-stellar-strawberry">INSIGHTS</h2>
-        </div>
+      <div className={`fixed right-0 top-1/2 -translate-y-1/2 flex items-center z-10 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-[280px]'}`}>
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="glass-strong border border-grayzone/20 rounded-l-lg px-1.5 py-4 flex flex-col items-center gap-2 hover:border-stellar-strawberry/40 transition-colors cursor-pointer"
+        >
+          <span className={`text-grayzone text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-0' : 'rotate-180'}`}>▶</span>
+          <span className="font-pixel text-[7px] text-grayzone writing-mode-vertical" style={{writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.1em'}}>INSIGHTS</span>
+        </button>
+        <div className="w-[280px] h-[calc(100vh-8rem)] glass-strong rounded-l-xl p-4 flex flex-col overflow-hidden border border-grayzone/20 gap-4">
+          <div className="flex justify-between items-center mb-2">
+            <h2 className="font-pixel text-xs text-stellar-strawberry">INSIGHTS</h2>
+          </div>
         <div className="animate-pulse flex flex-col gap-4">
           <div className="h-20 bg-grayzone/10 rounded-lg"></div>
           <div className="h-16 bg-grayzone/10 rounded-lg"></div>
           <div className="h-24 bg-grayzone/10 rounded-lg"></div>
           <div className="h-12 bg-grayzone/10 rounded-lg"></div>
+        </div>
         </div>
       </div>
     );
@@ -48,22 +67,43 @@ export default function InsightsPanel({ insights }: InsightsPanelProps) {
     return colors[index % colors.length];
   };
 
-  return (
-    <div
-      className={`fixed right-4 top-16 bottom-4 w-[280px] glass-strong rounded-xl p-4 flex flex-col z-10 transition-transform duration-300 ${
-        isOpen ? "translate-x-0" : "translate-x-[calc(100%-48px)]"
-      }`}
-    >
-      <div className="flex justify-between items-center mb-4 flex-shrink-0">
-        <h2 className="font-pixel text-xs text-stellar-strawberry">INSIGHTS</h2>
-        <PixelButton variant="secondary" size="sm" onClick={() => setIsOpen(!isOpen)}>
-          <span className={`inline-block transition-transform duration-200 ${isOpen ? "rotate-180" : "rotate-0"}`}>
-            ▶
-          </span>
-        </PixelButton>
-      </div>
+  const grouped = optimizationHints.reduce((acc, hint) => {
+    if (!acc[hint.type]) acc[hint.type] = [];
+    acc[hint.type].push(hint);
+    return acc;
+  }, {} as Record<string, InsightsReport['optimizationHints']>);
 
-      <div className="overflow-y-auto pr-1 no-scrollbar flex flex-col gap-6 flex-grow">
+  const groupOrder = ['no-primary-key', 'missing-index', 'nullable-fk', 'wide-table'];
+  const activeGroups = groupOrder.filter(type => grouped[type]?.length > 0);
+
+  const getGroupStyles = (type: string) => {
+    switch (type) {
+      case "missing-index": return { text: "text-amber-400", bg: "bg-amber-400/5", border: "border-amber-400/60" };
+      case "nullable-fk": return { text: "text-orange-400", bg: "bg-orange-400/5", border: "border-orange-400/60" };
+      case "wide-table": return { text: "text-blue-400", bg: "bg-blue-400/5", border: "border-blue-400/60" };
+      case "no-primary-key": return { text: "text-red-400", bg: "bg-red-400/5", border: "border-red-400/60" };
+      default: return { text: "text-grayzone", bg: "bg-grayzone/5", border: "border-grayzone/60" };
+    }
+  };
+
+  return (
+    <div className={`fixed right-0 top-1/2 -translate-y-1/2 flex items-center z-10 transition-transform duration-300 ${isOpen ? 'translate-x-0' : 'translate-x-[280px]'}`}>
+      {/* Always-visible pull tab */}
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="glass-strong border border-grayzone/20 rounded-l-lg px-1.5 py-4 flex flex-col items-center gap-2 hover:border-stellar-strawberry/40 transition-colors cursor-pointer"
+      >
+        <span className={`text-grayzone text-[10px] transition-transform duration-200 ${isOpen ? 'rotate-0' : 'rotate-180'}`}>▶</span>
+        <span className="font-pixel text-[7px] text-grayzone writing-mode-vertical" style={{writingMode: 'vertical-rl', textOrientation: 'mixed', letterSpacing: '0.1em'}}>INSIGHTS</span>
+      </button>
+
+      {/* Panel body */}
+      <div className="w-[280px] h-[calc(100vh-8rem)] glass-strong rounded-l-xl p-4 flex flex-col overflow-hidden border border-grayzone/20">
+        <div className="flex justify-between items-center mb-4 flex-shrink-0">
+          <h2 className="font-pixel text-xs text-stellar-strawberry">INSIGHTS</h2>
+        </div>
+
+        <div className="overflow-y-auto pr-1 no-scrollbar flex flex-col gap-6 flex-grow">
         
         {/* Schema Summary */}
         <div className="grid grid-cols-2 gap-2">
@@ -153,16 +193,59 @@ export default function InsightsPanel({ insights }: InsightsPanelProps) {
           <h3 className="font-pixel text-[10px] text-grayzone mb-3 uppercase">Optimization Hints</h3>
           <div className="flex flex-col gap-2">
             {optimizationHints.length > 0 ? (
-              optimizationHints.map((hint, i) => {
-                const colorClass = getHintColor(hint.type);
+              activeGroups.map(type => {
+                const groupHints = grouped[type];
+                const isGroupOpen = openGroups.has(type);
+                const styles = getGroupStyles(type);
+                
                 return (
-                  <GlassCard key={i} className={`p-2.5 border ${colorClass} bg-opacity-10`}>
-                    <div className="flex justify-between items-start mb-1">
-                      <span className="font-mono text-[9px] uppercase font-bold tracking-wider">{hint.type.replace('-', ' ')}</span>
-                      <span className="text-siesta-tan text-[10px] truncate max-w-[100px]">{hint.tableName}</span>
+                  <div key={type} className="flex flex-col">
+                    {/* Header */}
+                    <div 
+                      onClick={() => toggleGroup(type)}
+                      className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors hover:bg-white/5 border-l-2 ${styles.border} ${styles.bg}`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className={`font-pixel text-[9px] uppercase ${styles.text}`}>
+                          {type.replace('-', ' ')}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="bg-hei-se text-grayzone text-[9px] font-pixel px-1.5 py-0.5 rounded">
+                          {groupHints.length}
+                        </span>
+                        <span className={`text-grayzone text-[10px] transition-transform duration-200 ${isGroupOpen ? 'rotate-90' : 'rotate-0'}`}>
+                          ▶
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-grayzone text-[10px] leading-tight">{hint.message}</p>
-                  </GlassCard>
+                    
+                    {/* Expanded Content */}
+                    <AnimatePresence>
+                      {isGroupOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                          style={{ overflow: "hidden" }}
+                        >
+                          <div className="flex flex-col mt-2 pl-3">
+                            {groupHints.map((hint, i) => (
+                              <div key={i} className="py-2 border-t border-grayzone/10 first:border-0">
+                                <div className="flex justify-end mb-1">
+                                  <span className="text-siesta-tan text-[10px] font-mono">{hint.tableName}</span>
+                                </div>
+                                <p className="text-grayzone text-[10px] leading-relaxed">
+                                  {hint.message}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 );
               })
             ) : (
@@ -170,8 +253,8 @@ export default function InsightsPanel({ insights }: InsightsPanelProps) {
             )}
           </div>
         </div>
-
       </div>
     </div>
+  </div>
   );
 }

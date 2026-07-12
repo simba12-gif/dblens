@@ -19,7 +19,6 @@ import dagre from "dagre";
 
 import { SchemaGraph, InsightsReport } from "../lib/types";
 import { fetchInsights } from "../lib/api";
-import Navbar from "../components/landing/Navbar";
 import TableNode from "../components/visualize/TableNode";
 import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
@@ -262,6 +261,7 @@ function VisualizeCanvas() {
         onFitView={() => fitView({ padding: 0.2, duration: 800 })} 
         onResetLayout={handleResetLayout} 
         graphJson={rawGraphJson} 
+        onNewSchema={() => router.push('/upload')}
       />
 
       {/* Edge Tooltip */}
@@ -296,7 +296,6 @@ function VisualizeCanvas() {
 export default function VisualizePage() {
   return (
     <main className="w-screen h-screen bg-hei-se flex flex-col overflow-hidden">
-      <Navbar />
       <div className="flex-grow relative">
         <ReactFlowProvider>
           <VisualizeCanvas />
