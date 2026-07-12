@@ -11,6 +11,7 @@ interface PixelButtonProps {
   onClick?: () => void;
   className?: string;
   icon?: React.ReactNode;
+  disabled?: boolean;
 }
 
 export default function PixelButton({
@@ -21,20 +22,18 @@ export default function PixelButton({
   onClick,
   className = "",
   icon,
+  disabled = false,
 }: PixelButtonProps) {
   // Core structural classes: pixel font, uppercase, flex centering, small radius for slightly blocky corners, and the active "press" translation.
-  const baseStyles =
-    "relative inline-flex items-center justify-center gap-2 font-pixel uppercase tracking-wider rounded-[4px] transition-all duration-150 active:translate-x-[4px] active:translate-y-[4px] active:shadow-none cursor-pointer select-none";
+  const baseStyles = disabled
+    ? "relative inline-flex items-center justify-center gap-2 font-pixel uppercase tracking-wider rounded-[4px] select-none opacity-50 cursor-not-allowed pointer-events-none"
+    : "relative inline-flex items-center justify-center gap-2 font-pixel uppercase tracking-wider rounded-[4px] transition-all duration-150 active:translate-x-[4px] active:translate-y-[4px] active:shadow-none cursor-pointer select-none";
 
   const variants = {
     primary:
-      // Fill: Stellar Strawberry. Border/Shadow: Pico Eggplant. Text: Siesta Tan.
-      // Inner highlight (bevel): rgba(255, 255, 255, 0.3)
-      "bg-stellar-strawberry text-siesta-tan border-[3px] border-pico-eggplant shadow-[4px_4px_0_var(--color-pico-eggplant)] hover:brightness-110 shadow-[inset_0_3px_0_rgba(255,255,255,0.3)]",
+      `bg-stellar-strawberry text-siesta-tan border-[3px] border-pico-eggplant shadow-[4px_4px_0_var(--color-pico-eggplant),inset_0_3px_0_rgba(255,255,255,0.3)] ${disabled ? "" : "hover:brightness-110"}`,
     secondary:
-      // Fill: Blue Whale. Border/Shadow: Hei Se Black. Outline: Grayzone.
-      // Inner highlight (bevel): rgba(255, 255, 255, 0.1)
-      "bg-blue-whale text-siesta-tan border-[3px] border-grayzone shadow-[4px_4px_0_var(--color-hei-se)] hover:brightness-110 shadow-[inset_0_3px_0_rgba(255,255,255,0.1)]",
+      `bg-blue-whale text-siesta-tan border-[3px] border-grayzone shadow-[4px_4px_0_var(--color-hei-se),inset_0_3px_0_rgba(255,255,255,0.1)] ${disabled ? "" : "hover:brightness-110"}`,
   };
 
   const sizes = {
@@ -61,7 +60,7 @@ export default function PixelButton({
   }
 
   return (
-    <button onClick={onClick} className={classes}>
+    <button onClick={onClick} className={classes} disabled={disabled}>
       {content}
     </button>
   );

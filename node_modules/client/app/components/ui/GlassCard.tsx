@@ -18,7 +18,7 @@ export default function GlassCard({
   return (
     <motion.div
       className={`
-        glass-card rounded-2xl p-6
+        glass-card rounded-2xl
         ${glow ? "neon-border" : ""}
         ${className}
       `}
