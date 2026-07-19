@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import PixelButton from "../ui/PixelButton";
 
 interface CanvasControlsProps {
@@ -8,10 +8,37 @@ interface CanvasControlsProps {
   onResetLayout: () => void;
   graphJson: string;
   onNewSchema: () => void;
+  onExport: (format: 'png' | 'svg') => Promise<void>;
 }
 
-export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema }: CanvasControlsProps) {
+export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema, onExport }: CanvasControlsProps) {
   const [copied, setCopied] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const [exporting, setExporting] = useState<'png' | 'svg' | null>(null);
+
+  const handleExport = async (format: 'png' | 'svg') => {
+    setShowExportMenu(false);
+    setExporting(format);
+    try {
+      await onExport(format);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleCopy = async () => {
     try {
@@ -32,6 +59,38 @@ export default function CanvasControls({ onFitView, onResetLayout, graphJson, on
       <PixelButton variant="secondary" size="sm" onClick={onResetLayout}>
         RESET LAYOUT
       </PixelButton>
+      
+      <div className="w-px h-6 bg-grayzone/20"></div>
+
+      {/* Export button + popup */}
+      <div className="relative" ref={exportMenuRef}>
+        {showExportMenu && (
+          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 glass-strong border border-grayzone/20 rounded-lg overflow-hidden shadow-xl z-20 flex flex-col min-w-[100px]">
+            <button
+              onClick={() => handleExport('png')}
+              className="px-4 py-2 text-left font-pixel text-[9px] text-siesta-tan hover:bg-stellar-strawberry/20 hover:text-stellar-strawberry transition-colors uppercase tracking-wider"
+            >
+              PNG
+            </button>
+            <div className="h-px bg-grayzone/20" />
+            <button
+              onClick={() => handleExport('svg')}
+              className="px-4 py-2 text-left font-pixel text-[9px] text-siesta-tan hover:bg-stellar-strawberry/20 hover:text-stellar-strawberry transition-colors uppercase tracking-wider"
+            >
+              SVG
+            </button>
+          </div>
+        )}
+        <PixelButton
+          variant="secondary"
+          size="sm"
+          onClick={() => setShowExportMenu(prev => !prev)}
+          disabled={exporting !== null}
+        >
+          {exporting ? 'SAVING...' : 'EXPORT'}
+        </PixelButton>
+      </div>
+
       <div className="w-px h-6 bg-grayzone/20"></div>
       <PixelButton variant="secondary" size="sm" onClick={handleCopy}>
         {copied ? "COPIED!" : "COPY JSON"}

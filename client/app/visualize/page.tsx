@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   ReactFlow,
@@ -23,6 +23,7 @@ import TableNode from "../components/visualize/TableNode";
 import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
 import CanvasControls from "../components/visualize/CanvasControls";
+import { exportDiagram } from "../lib/export";
 
 const RANKSEP = 80;
 const NODESEP = 60; // Slightly increased for breathing room
@@ -61,6 +62,7 @@ const edgeTypes = { neonEdge: NeonEdge };
 function VisualizeCanvas() {
   const router = useRouter();
   const { fitView } = useReactFlow();
+  const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -232,10 +234,34 @@ function VisualizeCanvas() {
     setTimeout(() => fitView({ padding: 0.2 }), 100);
   };
 
+  const handleExport = useCallback(async (format: 'png' | 'svg') => {
+    // First fit the view so the full diagram is visible
+    fitView({ padding: 0.1, duration: 0 });
+
+    // Wait one frame for fitView to apply
+    await new Promise(resolve => requestAnimationFrame(resolve));
+    await new Promise(resolve => setTimeout(resolve, 150)); // let fitView fully settle
+
+    // Target the outer react-flow container, NOT the inner viewport
+    const reactFlowEl = reactFlowWrapper.current?.querySelector(
+      '.react-flow'
+    ) as HTMLElement | null;
+
+    if (!reactFlowEl) {
+      console.error('[DBLens] Could not find React Flow container element');
+      return;
+    }
+
+    await exportDiagram(reactFlowEl, {
+      format,
+      filename: 'dblens-diagram',
+    });
+  }, [fitView]);
+
   if (!graphData) return null;
 
   return (
-    <div className="w-full h-full relative">
+    <div ref={reactFlowWrapper} className="w-full h-full relative">
       <ReactFlow
         nodes={displayNodes}
         edges={displayEdges}
@@ -271,6 +297,7 @@ function VisualizeCanvas() {
         onResetLayout={handleResetLayout} 
         graphJson={rawGraphJson} 
         onNewSchema={() => router.push('/upload')}
+        onExport={handleExport}
       />
 
       {/* Edge Tooltip */}
