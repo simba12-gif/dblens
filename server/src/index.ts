@@ -1,7 +1,9 @@
+import 'dotenv/config';
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import schemaRouter from './routes/schema';
 import dbRouter from './routes/db';
+import aiRouter from './routes/ai';
 // ---------------------------------------------------------------------------
 // App setup
 // ---------------------------------------------------------------------------
@@ -38,6 +40,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 // Schema routes
 app.use('/api/schema', schemaRouter);
 app.use('/api/db', dbRouter);
+app.use('/api/ai', aiRouter);
 
 // ---------------------------------------------------------------------------
 // Global error handler

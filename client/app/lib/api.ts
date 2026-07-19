@@ -90,3 +90,21 @@ export async function checkHealth(): Promise<{ status: string }> {
   const res = await fetch(`${API_BASE}/health`);
   return res.json();
 }
+
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export async function askAI(
+  graph: SchemaGraph,
+  messages: ChatMessage[],
+  message: string,
+): Promise<ApiResponse<{ reply: string }>> {
+  const res = await fetch(`${API_BASE}/ai/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ graph, messages, message }),
+  });
+  return res.json();
+}

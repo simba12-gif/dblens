@@ -22,6 +22,7 @@ import { fetchInsights } from "../lib/api";
 import TableNode from "../components/visualize/TableNode";
 import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
+import AIAssistant from "../components/visualize/AIAssistant";
 import CanvasControls from "../components/visualize/CanvasControls";
 import GalaxyView from "../components/visualize/GalaxyView";
 import { exportDiagram } from "../lib/export";
@@ -275,6 +276,7 @@ function VisualizeCanvas({ graphData, rawGraphJson, insights, viewMode, onModeCh
         </div>
       )}
 
+      <AIAssistant graphData={graphData} />
       <InsightsPanel insights={insights} />
       
       <CanvasControls 
@@ -369,6 +371,8 @@ export default function VisualizePage() {
         {viewMode === 'galaxy' && (
           <>
             <GalaxyView graphData={graphData} />
+            <AIAssistant graphData={graphData} />
+            <InsightsPanel insights={insights} />
             <CanvasControls 
               onFitView={() => {}} 
               onResetLayout={() => {}} 
