@@ -1,3 +1,28 @@
-node_modules
+# Environment files
 .env
-.next
+.env.local
+server/.env
+client/.env.local
+
+# Build outputs
+.next/
+dist/
+build/
+
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug artifacts
+test-*.ts
+test-*.js
+trigger.js
