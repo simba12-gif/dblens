@@ -190,21 +190,33 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
     });
 
     // Stars - 3 Layers
-    const createStarLayer = (count: number, spread: number, size: number, opacity: number, sizeAttenuation: boolean = false) => {
+    const createStarLayer = (count: number, spread: number, size: number, opacity: number, color: string = '#ffffff') => {
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
-        pos[i*3] = (Math.random()-0.5)*spread;
-        pos[i*3+1] = (Math.random()-0.5)*spread;
-        pos[i*3+2] = (Math.random()-0.5)*spread;
+        pos[i*3]   = (Math.random() - 0.5) * spread;
+        pos[i*3+1] = (Math.random() - 0.5) * spread;
+        pos[i*3+2] = (Math.random() - 0.5) * spread;
       }
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const mat = new THREE.PointsMaterial({ color: '#ffffff', size, transparent: true, opacity, sizeAttenuation });
+      const mat = new THREE.PointsMaterial({
+        color,
+        size,
+        transparent: true,
+        opacity,
+        sizeAttenuation: false, // CRITICAL — keeps stars same size regardless of zoom/distance
+      });
       return new THREE.Points(geo, mat);
     };
-    scene.add(createStarLayer(3000, 800, 0.3, 0.9));
-    scene.add(createStarLayer(1500, 500, 0.5, 0.6));
-    scene.add(createStarLayer(400,  250, 0.8, 0.8));
+
+    // Main white stars — large count, high visibility
+    scene.add(createStarLayer(4000, 900, 2.0, 1.0));      // bright white
+    scene.add(createStarLayer(2000, 700, 1.5, 0.8));      // slightly dimmer
+    scene.add(createStarLayer(1000, 500, 3.0, 0.6));      // larger sparse stars
+
+    // Colored star tints for depth
+    scene.add(createStarLayer(500, 800, 1.5, 0.5, '#85A3B2'));  // blue-grey tint
+    scene.add(createStarLayer(300, 600, 2.0, 0.4, '#E9D8C8'));  // warm tint
 
     // Nebula Backgrounds
     const nebulaMat = new THREE.MeshBasicMaterial({
