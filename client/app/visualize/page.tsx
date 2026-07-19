@@ -23,6 +23,7 @@ import TableNode from "../components/visualize/TableNode";
 import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
 import CanvasControls from "../components/visualize/CanvasControls";
+import GalaxyView from "../components/visualize/GalaxyView";
 import { exportDiagram } from "../lib/export";
 
 const RANKSEP = 80;
@@ -59,17 +60,21 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 const nodeTypes = { tableNode: TableNode };
 const edgeTypes = { neonEdge: NeonEdge };
 
-function VisualizeCanvas() {
+interface VisualizeCanvasProps {
+  graphData: SchemaGraph;
+  rawGraphJson: string;
+  insights: InsightsReport | null;
+  viewMode: 'er' | 'galaxy';
+  onModeChange: (mode: 'er' | 'galaxy') => void;
+}
+
+function VisualizeCanvas({ graphData, rawGraphJson, insights, viewMode, onModeChange }: VisualizeCanvasProps) {
   const router = useRouter();
   const { fitView } = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const [insights, setInsights] = useState<InsightsReport | null>(null);
-  
-  const [graphData, setGraphData] = useState<SchemaGraph | null>(null);
-  const [rawGraphJson, setRawGraphJson] = useState("");
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [edgeTooltip, setEdgeTooltip] = useState<{
@@ -84,38 +89,19 @@ function VisualizeCanvas() {
 
   // Initialize
   useEffect(() => {
-    const rawSchema = localStorage.getItem("dblens:schema");
-    if (!rawSchema) {
-      router.push("/upload?reason=no-schema");
-      return;
-    }
-
     try {
-      setRawGraphJson(rawSchema);
-      const graph: SchemaGraph = JSON.parse(rawSchema);
-      setGraphData(graph);
-
-      // Fetch insights
-      fetchInsights(graph)
-        .then((res) => {
-          if (res.success && res.data) {
-            setInsights(res.data);
-          }
-        })
-        .catch(console.error);
-
       // Build Initial Nodes & Edges
-      const initialNodes: Node[] = graph.tables.map((t) => ({
+      const initialNodes: Node[] = graphData.tables.map((t) => ({
         id: t.id,
         type: "tableNode",
         position: { x: 0, y: 0 },
         data: { table: t },
       }));
 
-      const initialEdges: Edge[] = graph.edges.map((e) => ({
+      const initialEdges: Edge[] = graphData.edges.map((e) => ({
         id: e.id,
-        source: graph.tables.find(t => t.name === e.source)?.id || e.source,
-        target: graph.tables.find(t => t.name === e.target)?.id || e.target,
+        source: graphData.tables.find(t => t.name === e.source)?.id || e.source,
+        target: graphData.tables.find(t => t.name === e.target)?.id || e.target,
         sourceHandle: null,
         targetHandle: null,
         type: "neonEdge",
@@ -145,10 +131,9 @@ function VisualizeCanvas() {
         setTimeout(() => fitView({ padding: 0.2 }), 100);
       }
     } catch (e) {
-      console.error(e);
-      router.push("/upload?reason=invalid-schema");
+      console.error("Layout error", e);
     }
-  }, [router, fitView, setNodes, setEdges]);
+  }, [graphData, fitView, setNodes, setEdges]);
 
   // Persist node movements
   useEffect(() => {
@@ -298,6 +283,8 @@ function VisualizeCanvas() {
         graphJson={rawGraphJson} 
         onNewSchema={() => router.push('/upload')}
         onExport={handleExport}
+        mode={viewMode}
+        onModeChange={onModeChange}
       />
 
       {/* Edge Tooltip */}
@@ -330,12 +317,69 @@ function VisualizeCanvas() {
 }
 
 export default function VisualizePage() {
+  const router = useRouter();
+  const [graphData, setGraphData] = useState<SchemaGraph | null>(null);
+  const [rawGraphJson, setRawGraphJson] = useState("");
+  const [insights, setInsights] = useState<InsightsReport | null>(null);
+  const [viewMode, setViewMode] = useState<'er' | 'galaxy'>('er');
+
+  useEffect(() => {
+    const rawSchema = localStorage.getItem("dblens:schema");
+    if (!rawSchema) {
+      router.push("/upload?reason=no-schema");
+      return;
+    }
+
+    try {
+      setRawGraphJson(rawSchema);
+      const graph: SchemaGraph = JSON.parse(rawSchema);
+      setGraphData(graph);
+
+      // Fetch insights
+      fetchInsights(graph)
+        .then((res) => {
+          if (res.success && res.data) {
+            setInsights(res.data);
+          }
+        })
+        .catch(console.error);
+    } catch (e) {
+      console.error(e);
+      router.push("/upload?reason=invalid-schema");
+    }
+  }, [router]);
+
+  if (!graphData) return null;
+
   return (
     <main className="w-screen h-screen bg-hei-se flex flex-col overflow-hidden">
       <div className="flex-grow relative">
-        <ReactFlowProvider>
-          <VisualizeCanvas />
-        </ReactFlowProvider>
+        {viewMode === 'er' && (
+          <ReactFlowProvider>
+            <VisualizeCanvas 
+              graphData={graphData} 
+              rawGraphJson={rawGraphJson}
+              insights={insights}
+              viewMode={viewMode}
+              onModeChange={setViewMode}
+            />
+          </ReactFlowProvider>
+        )}
+        
+        {viewMode === 'galaxy' && (
+          <>
+            <GalaxyView graphData={graphData} />
+            <CanvasControls 
+              onFitView={() => {}} 
+              onResetLayout={() => {}} 
+              graphJson={rawGraphJson} 
+              onNewSchema={() => router.push('/upload')}
+              onExport={async () => {}}
+              mode={viewMode}
+              onModeChange={setViewMode}
+            />
+          </>
+        )}
       </div>
     </main>
   );

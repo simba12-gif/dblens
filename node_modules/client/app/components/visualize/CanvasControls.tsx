@@ -9,9 +9,11 @@ interface CanvasControlsProps {
   graphJson: string;
   onNewSchema: () => void;
   onExport: (format: 'png' | 'svg') => Promise<void>;
+  mode: 'er' | 'galaxy';
+  onModeChange: (mode: 'er' | 'galaxy') => void;
 }
 
-export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema, onExport }: CanvasControlsProps) {
+export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema, onExport, mode, onModeChange }: CanvasControlsProps) {
   const [copied, setCopied] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState<'png' | 'svg' | null>(null);
@@ -52,15 +54,37 @@ export default function CanvasControls({ onFitView, onResetLayout, graphJson, on
 
   return (
     <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-10 glass-strong px-4 py-2 rounded-xl flex items-center gap-3 border border-grayzone/20 shadow-xl">
-      <PixelButton variant="secondary" size="sm" onClick={onFitView}>
-        FIT VIEW
-      </PixelButton>
-      <div className="w-px h-6 bg-grayzone/20"></div>
-      <PixelButton variant="secondary" size="sm" onClick={onResetLayout}>
-        RESET LAYOUT
-      </PixelButton>
+      {/* Mode Toggle */}
+      <div className="flex items-center gap-1 bg-hei-se/50 p-1 rounded-lg border border-grayzone/10">
+        <PixelButton 
+          variant={mode === 'er' ? 'primary' : 'secondary'} 
+          size="sm" 
+          onClick={() => onModeChange('er')}
+        >
+          ER DIAGRAM
+        </PixelButton>
+        <PixelButton 
+          variant={mode === 'galaxy' ? 'primary' : 'secondary'} 
+          size="sm" 
+          onClick={() => onModeChange('galaxy')}
+        >
+          🪐 GALAXY
+        </PixelButton>
+      </div>
       
       <div className="w-px h-6 bg-grayzone/20"></div>
+
+      {mode === 'er' && (
+        <>
+          <PixelButton variant="secondary" size="sm" onClick={onFitView}>
+            FIT VIEW
+          </PixelButton>
+          <div className="w-px h-6 bg-grayzone/20"></div>
+          <PixelButton variant="secondary" size="sm" onClick={onResetLayout}>
+            RESET LAYOUT
+          </PixelButton>
+          
+          <div className="w-px h-6 bg-grayzone/20"></div>
 
       {/* Export button + popup */}
       <div className="relative" ref={exportMenuRef}>
@@ -92,6 +116,9 @@ export default function CanvasControls({ onFitView, onResetLayout, graphJson, on
       </div>
 
       <div className="w-px h-6 bg-grayzone/20"></div>
+      </>
+      )}
+
       <PixelButton variant="secondary" size="sm" onClick={handleCopy}>
         {copied ? "COPIED!" : "COPY JSON"}
       </PixelButton>
