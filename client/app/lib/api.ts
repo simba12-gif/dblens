@@ -1,6 +1,6 @@
 import { SchemaGraph, InsightsReport } from './types';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:3001/api";
 
 export interface ApiResponse<T> {
   success: boolean;
@@ -106,5 +106,23 @@ export async function askAI(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ graph, messages, message }),
   });
+  return res.json();
+}
+
+export async function shareSchema(
+  graph: SchemaGraph
+): Promise<ApiResponse<{ id: string; shareUrl: string }>> {
+  const res = await fetch(`${API_BASE}/share`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ graph }),
+  });
+  return res.json();
+}
+
+export async function fetchSharedSchema(
+  id: string
+): Promise<ApiResponse<{ graph: SchemaGraph; createdAt: string; expiresAt: string; viewCount: number }>> {
+  const res = await fetch(`${API_BASE}/share/${id}`);
   return res.json();
 }

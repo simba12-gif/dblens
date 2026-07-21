@@ -18,6 +18,10 @@ server/node_modules/
 *.log
 npm-debug.log*
 
+# Databases
+*.sqlite
+*.sqlite-journal
+
 # OS
 .DS_Store
 Thumbs.db

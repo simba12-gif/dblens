@@ -4,6 +4,7 @@ import cors from 'cors';
 import schemaRouter from './routes/schema';
 import dbRouter from './routes/db';
 import aiRouter from './routes/ai';
+import shareRouter from './routes/share';
 // ---------------------------------------------------------------------------
 // App setup
 // ---------------------------------------------------------------------------
@@ -12,13 +13,7 @@ const app = express();
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
 
 // --- CORS ----------------------------------------------------------------
-app.use(
-  cors({
-    origin: 'http://localhost:3000',
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  }),
-);
+app.use(cors());
 
 // --- Body parsers --------------------------------------------------------
 app.use(express.json({ limit: '5mb' }));
@@ -41,6 +36,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/schema', schemaRouter);
 app.use('/api/db', dbRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/share', shareRouter);
 
 // ---------------------------------------------------------------------------
 // Global error handler

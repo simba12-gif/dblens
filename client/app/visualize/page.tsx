@@ -18,7 +18,7 @@ import "@xyflow/react/dist/style.css";
 import dagre from "dagre";
 
 import { SchemaGraph, InsightsReport } from "../lib/types";
-import { fetchInsights } from "../lib/api";
+import { fetchInsights, shareSchema } from "../lib/api";
 import TableNode from "../components/visualize/TableNode";
 import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
@@ -63,13 +63,15 @@ const edgeTypes = { neonEdge: NeonEdge };
 
 interface VisualizeCanvasProps {
   graphData: SchemaGraph;
-  rawGraphJson: string;
-  insights: InsightsReport | null;
-  viewMode: 'er' | 'galaxy';
-  onModeChange: (mode: 'er' | 'galaxy') => void;
+  rawGraphJson?: string;
+  insights?: InsightsReport | null;
+  viewMode?: 'er' | 'galaxy';
+  onModeChange?: (mode: 'er' | 'galaxy') => void;
+  onShare?: () => Promise<void>;
+  readOnly?: boolean;
 }
 
-function VisualizeCanvas({ graphData, rawGraphJson, insights, viewMode, onModeChange }: VisualizeCanvasProps) {
+export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null, viewMode = 'er', onModeChange = () => {}, onShare = async () => {}, readOnly = false }: VisualizeCanvasProps) {
   const router = useRouter();
   const { fitView } = useReactFlow();
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
@@ -276,18 +278,20 @@ function VisualizeCanvas({ graphData, rawGraphJson, insights, viewMode, onModeCh
         </div>
       )}
 
-      <AIAssistant graphData={graphData} />
-      <InsightsPanel insights={insights} />
-      
-      <CanvasControls 
-        onFitView={() => fitView({ padding: 0.2, duration: 800 })} 
-        onResetLayout={handleResetLayout} 
-        graphJson={rawGraphJson} 
-        onNewSchema={() => router.push('/upload')}
-        onExport={handleExport}
-        mode={viewMode}
-        onModeChange={onModeChange}
-      />
+      {!readOnly && <AIAssistant graphData={graphData} />}
+      {!readOnly && <InsightsPanel insights={insights} />}
+      {!readOnly && (
+        <CanvasControls 
+          onFitView={() => fitView({ padding: 0.2, duration: 800 })} 
+          onResetLayout={handleResetLayout} 
+          graphJson={rawGraphJson} 
+          onNewSchema={() => router.push('/upload')}
+          onExport={handleExport}
+          onShare={onShare}
+          mode={viewMode}
+          onModeChange={onModeChange}
+        />
+      )}
 
       {/* Edge Tooltip */}
       {edgeTooltip && (
@@ -324,6 +328,37 @@ export default function VisualizePage() {
   const [rawGraphJson, setRawGraphJson] = useState("");
   const [insights, setInsights] = useState<InsightsReport | null>(null);
   const [viewMode, setViewMode] = useState<'er' | 'galaxy'>('er');
+
+  const handleShare = useCallback(async () => {
+    if (!graphData) return;
+    try {
+      const res = await shareSchema(graphData);
+      if (res.success && res.data) {
+        const fullUrl = `${window.location.origin}${res.data.shareUrl}`;
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(fullUrl);
+          } else {
+            const textArea = document.createElement("textarea");
+            textArea.value = fullUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+          }
+        } catch (err) {
+          console.error('Failed to copy to clipboard:', err);
+          alert(`Share link created! Copy this URL manually: \n\n${fullUrl}`);
+        }
+      } else {
+        console.error('Share failed:', res.error?.message);
+        alert('Share failed: ' + res.error?.message);
+      }
+    } catch (error: any) {
+      console.error('Network error during share:', error);
+      alert('Network Error: Could not reach the backend server. Make sure the server is running on port 3001. Details: ' + error.message);
+    }
+  }, [graphData]);
 
   useEffect(() => {
     const rawSchema = localStorage.getItem("dblens:schema");
@@ -364,6 +399,7 @@ export default function VisualizePage() {
               insights={insights}
               viewMode={viewMode}
               onModeChange={setViewMode}
+              onShare={handleShare}
             />
           </ReactFlowProvider>
         )}
@@ -379,6 +415,7 @@ export default function VisualizePage() {
               graphJson={rawGraphJson} 
               onNewSchema={() => router.push('/upload')}
               onExport={async () => {}}
+              onShare={handleShare}
               mode={viewMode}
               onModeChange={setViewMode}
             />

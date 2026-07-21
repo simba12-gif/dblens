@@ -9,14 +9,27 @@ interface CanvasControlsProps {
   graphJson: string;
   onNewSchema: () => void;
   onExport: (format: 'png' | 'svg') => Promise<void>;
+  onShare: () => Promise<void>;
   mode: 'er' | 'galaxy';
   onModeChange: (mode: 'er' | 'galaxy') => void;
 }
 
-export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema, onExport, mode, onModeChange }: CanvasControlsProps) {
+export default function CanvasControls({ onFitView, onResetLayout, graphJson, onNewSchema, onExport, onShare, mode, onModeChange }: CanvasControlsProps) {
   const [copied, setCopied] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const [exporting, setExporting] = useState<'png' | 'svg' | null>(null);
+  const [shareState, setShareState] = useState<'idle' | 'loading' | 'copied'>('idle');
+
+  const handleShare = async () => {
+    setShareState('loading');
+    try {
+      await onShare();
+      setShareState('copied');
+      setTimeout(() => setShareState('idle'), 3000);
+    } catch {
+      setShareState('idle');
+    }
+  };
 
   const handleExport = async (format: 'png' | 'svg') => {
     setShowExportMenu(false);
@@ -114,6 +127,17 @@ export default function CanvasControls({ onFitView, onResetLayout, graphJson, on
           {exporting ? 'SAVING...' : 'EXPORT'}
         </PixelButton>
       </div>
+
+      <div className="w-px h-6 bg-grayzone/20"></div>
+
+      <PixelButton
+        variant="secondary"
+        size="sm"
+        onClick={handleShare}
+        disabled={shareState === 'loading'}
+      >
+        {shareState === 'loading' ? 'SHARING...' : shareState === 'copied' ? '🔗 COPIED!' : 'SHARE'}
+      </PixelButton>
 
       <div className="w-px h-6 bg-grayzone/20"></div>
       </>
