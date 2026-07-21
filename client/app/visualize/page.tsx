@@ -24,6 +24,7 @@ import NeonEdge from "../components/visualize/NeonEdge";
 import InsightsPanel from "../components/visualize/InsightsPanel";
 import AIAssistant from "../components/visualize/AIAssistant";
 import CanvasControls from "../components/visualize/CanvasControls";
+import TopHeader from "../components/visualize/TopHeader";
 import GalaxyView from "../components/visualize/GalaxyView";
 import { exportDiagram } from "../lib/export";
 
@@ -281,16 +282,20 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
       {!readOnly && <AIAssistant graphData={graphData} />}
       {!readOnly && <InsightsPanel insights={insights} />}
       {!readOnly && (
-        <CanvasControls 
-          onFitView={() => fitView({ padding: 0.2, duration: 800 })} 
-          onResetLayout={handleResetLayout} 
-          graphJson={rawGraphJson} 
-          onNewSchema={() => router.push('/upload')}
-          onExport={handleExport}
-          onShare={onShare}
-          mode={viewMode}
-          onModeChange={onModeChange}
-        />
+        <>
+          <TopHeader 
+            graphJson={rawGraphJson} 
+            onNewSchema={() => router.push('/upload')}
+            onExport={handleExport}
+            onShare={onShare}
+          />
+          <CanvasControls 
+            onFitView={() => fitView({ padding: 0.2, duration: 800 })} 
+            onResetLayout={handleResetLayout} 
+            mode={viewMode}
+            onModeChange={onModeChange}
+          />
+        </>
       )}
 
       {/* Edge Tooltip */}
@@ -407,15 +412,9 @@ export default function VisualizePage() {
         {viewMode === 'galaxy' && (
           <>
             <GalaxyView graphData={graphData} />
-            <AIAssistant graphData={graphData} />
-            <InsightsPanel insights={insights} />
             <CanvasControls 
               onFitView={() => {}} 
               onResetLayout={() => {}} 
-              graphJson={rawGraphJson} 
-              onNewSchema={() => router.push('/upload')}
-              onExport={async () => {}}
-              onShare={handleShare}
               mode={viewMode}
               onModeChange={setViewMode}
             />

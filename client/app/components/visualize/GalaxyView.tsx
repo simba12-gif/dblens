@@ -99,7 +99,7 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
       const material = new THREE.MeshStandardMaterial({
         color: new THREE.Color(color),
         emissive: new THREE.Color(color),
-        emissiveIntensity: 0.8,
+        emissiveIntensity: 2.0,
         roughness: 0.3,
         metalness: 0.2,
       });
@@ -112,7 +112,7 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
       planetMeshes.push(mesh);
 
       // Add a point light AT each planet position for local glow
-      const planetLight = new THREE.PointLight(color, 2, 30);
+      const planetLight = new THREE.PointLight(color, 4, 30);
       planetLight.position.copy(pos);
       scene.add(planetLight);
 
@@ -120,7 +120,7 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
       const glowMat = new THREE.MeshBasicMaterial({
         color: new THREE.Color(color),
         transparent: true,
-        opacity: 0.2,
+        opacity: 0.4,
         side: THREE.BackSide,
       });
       const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 2.0, 16, 16), glowMat);
@@ -154,13 +154,13 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
         const radius = Math.max(2.5, Math.min(6, 2.0 + (graphData.tables.find(t => t.id === srcId)?.columns.length || 0) * 0.25));
         
         const outerGeo = new THREE.TorusGeometry(radius + 1.5, 0.35, 8, 24);
-        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF5C8D', transparent: true, opacity: 0.15 });
+        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 0.4 });
         outerMesh = new THREE.Mesh(outerGeo, outerMat);
         outerMesh.position.copy(sourcePos).add(new THREE.Vector3(0, radius + 1.5, 0));
         outerMesh.rotation.x = Math.PI / 4;
 
         const innerGeo = new THREE.TorusGeometry(radius + 1.5, 0.08, 8, 24);
-        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF5C8D', transparent: true, opacity: 0.9 });
+        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 1.0 });
         innerMesh = new THREE.Mesh(innerGeo, innerMat);
         innerMesh.position.copy(sourcePos).add(new THREE.Vector3(0, radius + 1.5, 0));
         innerMesh.rotation.x = Math.PI / 4;
@@ -173,11 +173,11 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
         const curve = new THREE.CatmullRomCurve3([sourcePos, midPoint, targetPos]);
         
         const outerGeo = new THREE.TubeGeometry(curve, 20, 0.35, 8, false);
-        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF5C8D', transparent: true, opacity: 0.15 });
+        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 0.4 });
         outerMesh = new THREE.Mesh(outerGeo, outerMat);
 
         const innerGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
-        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF5C8D', transparent: true, opacity: 0.9 });
+        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 1.0 });
         innerMesh = new THREE.Mesh(innerGeo, innerMat);
       }
       
@@ -189,8 +189,24 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
       edgeMeshes.push(innerMesh);
     });
 
+    // Pixel Art SVG Textures
+    const svgCrossStar = `<svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="0" width="1" height="9" fill="white"/><rect x="0" y="4" width="9" height="1" fill="white"/><rect x="3" y="3" width="3" height="3" fill="white"/></svg>`;
+    const svgComet = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="3" height="3" fill="#ff5722"/><rect x="2" y="2" width="3" height="3" fill="#ff9800"/><rect x="4" y="4" width="4" height="4" fill="#ffeb3b"/><rect x="8" y="8" width="6" height="6" fill="white"/><rect x="11" y="11" width="2" height="2" fill="#22d3ee"/></svg>`;
+    const svgMoon = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2" width="6" height="2" fill="#facc15"/><rect x="4" y="4" width="4" height="2" fill="#facc15"/><rect x="2" y="6" width="4" height="4" fill="#facc15"/><rect x="4" y="10" width="4" height="2" fill="#facc15"/><rect x="6" y="12" width="6" height="2" fill="#facc15"/></svg>`;
+
+    const loadPixelTexture = (svg: string) => {
+      const texture = new THREE.TextureLoader().load('data:image/svg+xml;base64,' + btoa(svg));
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      return texture;
+    };
+
+    const crossStarTex = loadPixelTexture(svgCrossStar);
+    const cometTex = loadPixelTexture(svgComet);
+    const moonTex = loadPixelTexture(svgMoon);
+
     // Stars - 3 Layers
-    const createStarLayer = (count: number, spread: number, size: number, opacity: number, color: string = '#ffffff') => {
+    const createStarLayer = (count: number, spread: number, size: number, opacity: number, color: string = '#ffffff', tex?: THREE.Texture) => {
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
@@ -205,15 +221,22 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
         transparent: true,
         opacity,
         sizeAttenuation: false, // CRITICAL — keeps stars same size regardless of zoom/distance
+        map: tex || null,
+        alphaTest: tex ? 0.5 : 0,
       });
       return new THREE.Points(geo, mat);
     };
 
-    // Main white stars — large count, high visibility
     scene.add(createStarLayer(4000, 900, 2.0, 1.0));      // bright white
     scene.add(createStarLayer(2000, 700, 1.5, 0.8));      // slightly dimmer
     scene.add(createStarLayer(1000, 500, 3.0, 0.6));      // larger sparse stars
-
+    
+    // Pixel Art Elements (Increased counts, reduced spread, larger sizes)
+    scene.add(createStarLayer(150, 600, 24, 1.0, '#ffffff', crossStarTex));
+    scene.add(createStarLayer(100, 600, 18, 1.0, '#facc15', crossStarTex)); // Yellow stars
+    scene.add(createStarLayer(100, 600, 20, 1.0, '#FF2A6D', crossStarTex)); // Pink stars
+    scene.add(createStarLayer(100, 600, 16, 1.0, '#22d3ee', crossStarTex)); // Cyan stars
+    
     // Colored star tints for depth
     scene.add(createStarLayer(500, 800, 1.5, 0.5, '#85A3B2'));  // blue-grey tint
     scene.add(createStarLayer(300, 600, 2.0, 0.4, '#E9D8C8'));  // warm tint
@@ -317,11 +340,11 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
       planetMeshes.forEach((mesh, i) => {
         const mat = mesh.material as THREE.MeshStandardMaterial;
         if (mesh.userData.tableId === currentSelectedTable) {
-          mat.emissiveIntensity = 1.0;
+          mat.emissiveIntensity = 2.5;
           mat.opacity = 1.0;
           mat.transparent = false;
         } else {
-          mat.emissiveIntensity = 0.4 + Math.sin(t + i) * 0.2;
+          mat.emissiveIntensity = 1.0 + Math.sin(t + i) * 0.5;
           if (currentSelectedTable) {
             mat.transparent = true;
             mat.opacity = 0.3;
@@ -342,7 +365,7 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
             mat.opacity = 0.05;
           }
         } else {
-          mat.opacity = isOuter ? 0.15 : 0.9;
+          mat.opacity = isOuter ? 0.4 : 1.0;
         }
       });
 
