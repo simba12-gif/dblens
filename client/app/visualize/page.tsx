@@ -26,6 +26,8 @@ import AIAssistant from "../components/visualize/AIAssistant";
 import CanvasControls from "../components/visualize/CanvasControls";
 import TopHeader from "../components/visualize/TopHeader";
 import GalaxyView from "../components/visualize/GalaxyView";
+import QueryPanel from "../components/visualize/QueryPanel";
+import { ParsedQuery, QueryStep, extractOnColumns } from "../lib/queryParser";
 import { exportDiagram } from "../lib/export";
 
 const RANKSEP = 80;
@@ -90,6 +92,72 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
     targetTable: string;
     type: string;
   } | null>(null);
+
+  const [queryHighlight, setQueryHighlight] = useState<{
+    activeTableName: string | null;
+    visitedTableNames: Set<string>;
+    activeEdgeIds: Set<string>;
+    activeColumns: { tableName: string; columnName: string }[];
+  } | null>(null);
+
+  const handleQueryStep = useCallback((step: QueryStep, stepIndex: number, parsed: ParsedQuery) => {
+    const activeTableName = step.table.toLowerCase();
+
+    const visitedTableNames = new Set(
+      parsed.steps.slice(0, stepIndex + 1).map(s => s.table.toLowerCase())
+    );
+
+    const activeEdgeIds = new Set<string>();
+    if (stepIndex > 0) {
+      const prevTableName = parsed.steps[stepIndex - 1].table.toLowerCase();
+      graphData.edges.forEach(e => {
+        const srcName = e.source.toLowerCase();
+        const tgtName = e.target.toLowerCase();
+        if (
+          (srcName === activeTableName && visitedTableNames.has(tgtName)) ||
+          (tgtName === activeTableName && visitedTableNames.has(srcName))
+        ) {
+          activeEdgeIds.add(e.id);
+        }
+      });
+    }
+
+    // Build alias → real table name map from all steps
+    const aliasMap = new Map<string, string>();
+    parsed.steps.forEach(s => {
+      if (s.alias) aliasMap.set(s.alias.toLowerCase(), s.table.toLowerCase());
+      // Also map the table name to itself
+      aliasMap.set(s.table.toLowerCase(), s.table.toLowerCase());
+    });
+
+    // Resolve alias in activeColumns
+    const activeColumns: { tableName: string; columnName: string }[] = [];
+    if (step.onClause) {
+      const parsed2 = extractOnColumns(step.onClause);
+      if (parsed2) {
+        // Resolve left side
+        const leftTableRaw = parsed2.leftTable?.toLowerCase();
+        const leftTableResolved = leftTableRaw
+          ? (aliasMap.get(leftTableRaw) || leftTableRaw)
+          : activeTableName;
+        activeColumns.push({ tableName: leftTableResolved, columnName: parsed2.leftCol.toLowerCase() });
+
+        // Resolve right side
+        const rightTableRaw = parsed2.rightTable?.toLowerCase();
+        const prevTable = stepIndex > 0 ? parsed.steps[stepIndex - 1].table.toLowerCase() : activeTableName;
+        const rightTableResolved = rightTableRaw
+          ? (aliasMap.get(rightTableRaw) || rightTableRaw)
+          : prevTable;
+        activeColumns.push({ tableName: rightTableResolved, columnName: parsed2.rightCol.toLowerCase() });
+      }
+    }
+
+    setQueryHighlight({ activeTableName, visitedTableNames, activeEdgeIds, activeColumns });
+  }, [graphData]);
+
+  const handleQueryReset = useCallback(() => {
+    setQueryHighlight(null);
+  }, []);
 
   // Initialize
   useEffect(() => {
@@ -187,7 +255,26 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
 
   // Compute derived node/edge states based on selection
   const displayNodes = useMemo(() => {
-    if (!selectedNodeId) return nodes.map(n => ({ ...n, style: { opacity: 1 } }));
+    if (queryHighlight) {
+      return nodes.map(n => {
+        const tableName = graphData.tables.find(t => t.id === n.id)?.name?.toLowerCase() || '';
+        const isActive = tableName === queryHighlight.activeTableName;
+        const isVisited = queryHighlight.visitedTableNames.has(tableName);
+        const highlightedColumns = queryHighlight.activeColumns
+          .filter(c => c.tableName === tableName)
+          .map(c => c.columnName);
+        return {
+          ...n,
+          style: {
+            opacity: isVisited || isActive ? 1 : 0.2,
+            transition: 'opacity 0.3s',
+          },
+          data: { ...n.data, isActive, isVisited, highlightedColumns },
+        };
+      });
+    }
+
+    if (!selectedNodeId) return nodes.map(n => ({ ...n, style: { opacity: 1 }, data: { ...n.data, isActive: false, isVisited: false, highlightedColumns: [] } }));
 
     // Find all connected nodes
     const connectedNodeIds = new Set<string>();
@@ -200,11 +287,24 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
 
     return nodes.map(n => ({
       ...n,
-      style: { opacity: connectedNodeIds.has(n.id) ? 1 : 0.3, transition: 'opacity 0.2s' }
+      style: { opacity: connectedNodeIds.has(n.id) ? 1 : 0.3, transition: 'opacity 0.2s' },
+      data: { ...n.data, isActive: false, isVisited: false, highlightedColumns: [] }
     }));
-  }, [nodes, edges, selectedNodeId]);
+  }, [nodes, edges, selectedNodeId, queryHighlight, graphData]);
 
   const displayEdges = useMemo(() => {
+    if (queryHighlight) {
+      return edges.map(e => ({
+        ...e,
+        selected: queryHighlight.activeEdgeIds.has(e.id),
+        animated: queryHighlight.activeEdgeIds.has(e.id),
+        style: {
+          opacity: queryHighlight.activeEdgeIds.has(e.id) ? 1 : 0.1,
+          transition: 'opacity 0.3s',
+        },
+      }));
+    }
+
     if (!selectedNodeId) return edges.map(e => ({ ...e, selected: false, style: { opacity: 1 } }));
     
     return edges.map(e => {
@@ -215,7 +315,7 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
         style: { opacity: isConnected ? 1 : 0.1, transition: 'opacity 0.2s' }
       };
     });
-  }, [edges, selectedNodeId]);
+  }, [edges, selectedNodeId, queryHighlight]);
 
   // Controls
   const handleResetLayout = () => {
@@ -283,6 +383,13 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
 
       {!readOnly && <AIAssistant graphData={graphData} />}
       {!readOnly && <InsightsPanel insights={insights} />}
+      {!readOnly && (
+        <QueryPanel
+          graphData={graphData}
+          onStepChange={handleQueryStep}
+          onReset={handleQueryReset}
+        />
+      )}
       {!readOnly && (
         <>
           <TopHeader 
