@@ -128,10 +128,12 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
         const layoutedNodes = getLayoutedElements(initialNodes, initialEdges);
         setNodes(layoutedNodes);
         setEdges(initialEdges);
-        localStorage.setItem(
-          "dblens:layout",
-          JSON.stringify(layoutedNodes.map(n => ({ id: n.id, position: n.position })))
-        );
+        if (!readOnly) {
+          localStorage.setItem(
+            "dblens:layout",
+            JSON.stringify(layoutedNodes.map(n => ({ id: n.id, position: n.position })))
+          );
+        }
         setTimeout(() => fitView({ padding: 0.2 }), 100);
       }
     } catch (e) {
@@ -141,13 +143,13 @@ export function VisualizeCanvas({ graphData, rawGraphJson = "", insights = null,
 
   // Persist node movements
   useEffect(() => {
-    if (nodes.length > 0) {
+    if (nodes.length > 0 && !readOnly) {
       localStorage.setItem(
         "dblens:layout",
         JSON.stringify(nodes.map(n => ({ id: n.id, position: n.position })))
       );
     }
-  }, [nodes]);
+  }, [nodes, readOnly]);
 
   // Handle Node Click
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
