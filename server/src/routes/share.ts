@@ -7,7 +7,9 @@ const router = Router();
 // Generate a random 8-char alphanumeric ID
 function generateId(): string {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 8 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+  return Array.from({ length: 8 }, () =>
+    chars[Math.floor(Math.random() * chars.length)]
+  ).join('');
 }
 
 // POST /api/share — save schema, return share ID
@@ -23,6 +25,7 @@ router.post('/', async (req: Request, res: Response): Promise<any> => {
 
   // Limit schema size — max 2MB JSON
   const schemaJson = JSON.stringify(graph);
+
   if (schemaJson.length > 2 * 1024 * 1024) {
     return res.status(400).json({
       success: false,
@@ -34,13 +37,22 @@ router.post('/', async (req: Request, res: Response): Promise<any> => {
   const id = generateId();
 
   try {
-    await db.run(
-      `INSERT INTO shared_schemas (id, schema_json) VALUES (?, ?)`,
+    await db.query(
+      `INSERT INTO shared_schemas (id, schema_json)
+       VALUES ($1, $2)`,
       [id, schemaJson]
     );
-    return res.json({ success: true, data: { id, shareUrl: `/s/${id}` } });
+
+    return res.json({
+      success: true,
+      data: {
+        id,
+        shareUrl: `/s/${id}`,
+      },
+    });
   } catch (err) {
     console.error('[DBLens] Share save error:', err);
+
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to save shared schema.' },
@@ -63,27 +75,30 @@ router.get('/:id', async (req: Request, res: Response): Promise<any> => {
   const db = await getDb();
 
   try {
-    await db.run(
+    await db.query(
       `UPDATE shared_schemas
        SET view_count = view_count + 1
-       WHERE id = ?
-         AND expires_at > datetime('now')`,
+       WHERE id = $1
+         AND expires_at > NOW()`,
       [id]
     );
 
-    const row = await db.get(
-      `SELECT schema_json, created_at, expires_at, view_count 
-       FROM shared_schemas 
-       WHERE id = ?`,
+    const result = await db.query(
+      `SELECT schema_json, created_at, expires_at, view_count
+       FROM shared_schemas
+       WHERE id = $1`,
       [id]
     );
+
+    const row = result.rows[0];
 
     if (!row) {
       return res.status(404).json({
         success: false,
         error: {
           message: 'Share link not found or has expired.',
-          suggestion: 'Share links expire after 30 days. Ask the owner to generate a new link.',
+          suggestion:
+            'Share links expire after 30 days. Ask the owner to generate a new link.',
         },
       });
     }
@@ -99,6 +114,7 @@ router.get('/:id', async (req: Request, res: Response): Promise<any> => {
     });
   } catch (err) {
     console.error('[DBLens] Share fetch error:', err);
+
     return res.status(500).json({
       success: false,
       error: { message: 'Failed to retrieve shared schema.' },

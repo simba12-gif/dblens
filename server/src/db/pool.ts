@@ -1,15 +1,17 @@
-import sqlite3 from 'sqlite3';
-import { open, Database } from 'sqlite';
-import path from 'path';
+import { Pool } from 'pg';
 
-let dbInstance: Database | null = null;
+let poolInstance: Pool | null = null;
 
-export async function getDb(): Promise<Database> {
-  if (!dbInstance) {
-    dbInstance = await open({
-      filename: path.join(__dirname, '../../../database.sqlite'),
-      driver: sqlite3.Database
+export async function getDb(): Promise<Pool> {
+  if (!poolInstance) {
+    if (!process.env.DATABASE_URL) {
+      throw new Error('DATABASE_URL is not configured');
+    }
+
+    poolInstance = new Pool({
+      connectionString: process.env.DATABASE_URL,
     });
   }
-  return dbInstance;
+
+  return poolInstance;
 }

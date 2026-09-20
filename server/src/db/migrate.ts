@@ -1,23 +1,17 @@
-import 'dotenv/config';
 import { getDb } from './pool';
 
-async function migrate() {
+export async function migrate(): Promise<void> {
   const db = await getDb();
-  
-  await db.exec(`
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS shared_schemas (
-      id          TEXT PRIMARY KEY,
+      id VARCHAR(8) PRIMARY KEY,
       schema_json TEXT NOT NULL,
-      created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-      expires_at  DATETIME DEFAULT (datetime('now', '+30 days')),
-      view_count  INTEGER  DEFAULT 0
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_shared_schemas_expires
-      ON shared_schemas (expires_at);
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      expires_at TIMESTAMP DEFAULT (CURRENT_TIMESTAMP + INTERVAL '30 days'),
+      view_count INTEGER DEFAULT 0
+    )
   `);
-  
-  console.log('Migration complete: shared_schemas table ready (SQLite)');
-}
 
-migrate().catch(console.error);
+  console.log('[DBLens] Database migration completed.');
+}

@@ -5,6 +5,8 @@ import schemaRouter from './routes/schema';
 import dbRouter from './routes/db';
 import aiRouter from './routes/ai';
 import shareRouter from './routes/share';
+import { migrate } from './db/migrate';
+
 // ---------------------------------------------------------------------------
 // App setup
 // ---------------------------------------------------------------------------
@@ -61,8 +63,12 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
 // Start
 // ---------------------------------------------------------------------------
 
-app.listen(PORT, () => {
-  console.log(`
+async function startServer() {
+  try {
+    await migrate();
+
+    app.listen(PORT, () => {
+      console.log(`
 ╔══════════════════════════════════════════╗
 ║                                          ║
 ║        ____  ____  _                     ║
@@ -77,7 +83,14 @@ app.listen(PORT, () => {
 ║  Server running on port ${String(PORT).padEnd(5)}            ║
 ║  Health: http://localhost:${PORT}/api/health  ║
 ╚══════════════════════════════════════════╝
-  `);
-});
+      `);
+    });
+  } catch (error) {
+    console.error('[DBLens] Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+startServer();
 
 export default app;
