@@ -93,7 +93,7 @@ export default function SharedPage() {
 
       <div className="flex-grow relative">
         <ReactFlowProvider>
-          <VisualizeCanvas graphData={graphData} readOnly />
+          {graphData && <VisualizeCanvas graphData={graphData} readOnly />}
         </ReactFlowProvider>
       </div>
     </main>

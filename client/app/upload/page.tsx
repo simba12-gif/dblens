@@ -78,18 +78,19 @@ export default function UploadPage() {
         res = await connectDatabase(connectionString);
       }
 
-      if (res.success && res.data) {
+      if (res && res.success && res.data) {
         localStorage.setItem("dblens:schema", JSON.stringify(res.data));
         router.push("/visualize");
-      } else {
+      } else if (res) {
         setError({
           message: res.error?.message || "An unknown error occurred.",
           suggestion: res.error?.suggestion,
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to connect to the server.";
       setError({
-        message: err.message || "Failed to connect to the server.",
+        message,
       });
     } finally {
       setIsParsing(false);

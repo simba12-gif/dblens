@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { TableNode as TableNodeType } from "../../../lib/types";
+import { TableNode as TableNodeType } from "../../lib/types";
 
 interface TableNodeProps {
   data: {

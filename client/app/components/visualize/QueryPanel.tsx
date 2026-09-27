@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { ParsedQuery, QueryStep, parseSelectQuery } from "../../lib/queryParser";
+import { SchemaGraph, TableNode } from "../../lib/types";
 import PixelButton from "../ui/PixelButton";
 
 const SPEED_OPTIONS = [
@@ -12,7 +13,7 @@ const SPEED_OPTIONS = [
 ] as const;
 
 interface QueryPanelProps {
-  graphData: any; 
+  graphData: SchemaGraph; 
   onStepChange: (step: QueryStep, stepIndex: number, query: ParsedQuery) => void;
   onReset: () => void;
 }
@@ -53,7 +54,7 @@ export default function QueryPanel({ graphData, onStepChange, onReset }: QueryPa
         return;
       }
       
-      const schemaTableNames = (graphData.tables || []).map((t: any) => t.name.toLowerCase());
+      const schemaTableNames = (graphData.tables || []).map((t: TableNode) => t.name.toLowerCase());
       const unknownTables = parsed.tables.filter((t: string) => !schemaTableNames.includes(t.toLowerCase()));
       
       if (unknownTables.length === parsed.tables.length && parsed.tables.length > 0) {
@@ -144,8 +145,8 @@ export default function QueryPanel({ graphData, onStepChange, onReset }: QueryPa
     const exampleQuery = (graphData.edges && graphData.edges.length > 0)
       ? (() => {
           const firstEdge = graphData.edges[0];
-          const srcTable = graphData.tables.find((t: any) => t.id === firstEdge.source || t.name === firstEdge.source)?.name || firstEdge.source;
-          const tgtTable = graphData.tables.find((t: any) => t.id === firstEdge.target || t.name === firstEdge.target)?.name || firstEdge.target;
+          const srcTable = graphData.tables.find((t: TableNode) => t.id === firstEdge.source || t.name === firstEdge.source)?.name || firstEdge.source;
+          const tgtTable = graphData.tables.find((t: TableNode) => t.id === firstEdge.target || t.name === firstEdge.target)?.name || firstEdge.target;
           return srcTable && tgtTable
             ? `SELECT *\nFROM ${tgtTable}\nINNER JOIN ${srcTable} ON ${srcTable}.${firstEdge.sourceColumn || 'id'} = ${tgtTable}.${firstEdge.targetColumn || 'id'}`
             : `SELECT * FROM ${graphData.tables[0]?.name || 'your_table'}`;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { InsightsReport } from "../../../lib/types";
+import { InsightsReport } from "../../lib/types";
 import GlassCard from "../ui/GlassCard";
 import PixelButton from "../ui/PixelButton";
 

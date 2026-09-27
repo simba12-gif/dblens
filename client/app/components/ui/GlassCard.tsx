@@ -1,8 +1,8 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, HTMLMotionProps } from "framer-motion";
 
-interface GlassCardProps {
+interface GlassCardProps extends HTMLMotionProps<"div"> {
   children: React.ReactNode;
   className?: string;
   hover?: boolean;
@@ -14,9 +14,11 @@ export default function GlassCard({
   className = "",
   hover = true,
   glow = false,
+  ...props
 }: GlassCardProps) {
   return (
     <motion.div
+      {...props}
       className={`
         glass-card rounded-2xl
         ${glow ? "neon-border" : ""}

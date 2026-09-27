@@ -468,9 +468,10 @@ export default function VisualizePage() {
         console.error('Share failed:', res.error?.message);
         alert('Share failed: ' + res.error?.message);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
       console.error('Network error during share:', error);
-      alert('Network Error: Could not reach the backend server. Make sure the server is running on port 3001. Details: ' + error.message);
+      alert('Network Error: Could not reach the backend server. Make sure the server is running on port 3001. Details: ' + message);
     }
   }, [graphData]);
 

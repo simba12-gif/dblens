@@ -32,6 +32,11 @@ function getCurveX(t: number) {
 // Fixed thresholds (t values) for the 4 nodes along the curve
 const thresholds = [0.15, 0.38, 0.62, 0.85];
 
+interface FeatureItem {
+  title: string;
+  description: string;
+}
+
 function NodeAndText({ 
   feature, 
   progress, 
@@ -39,7 +44,7 @@ function NodeAndText({
   nextThreshold, 
   t 
 }: { 
-  feature: any; 
+  feature: FeatureItem; 
   progress: MotionValue<number>; 
   threshold: number; 
   nextThreshold: number;
