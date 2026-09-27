@@ -13,7 +13,7 @@ Upload a SQL file, paste DDL, or connect a live PostgreSQL database — and inst
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-blue?style=flat-square&logo=postgresql)](https://postgresql.org)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-black?style=flat-square&logo=three.js)](https://threejs.org)
 
-[**Live Demo**](https://github.com/simba12-gif/dblens) · [**Report Bug**](https://github.com/simba12-gif/dblens/issues) · [**Request Feature**](https://github.com/simba12-gif/dblens/issues)
+[**Live Demo**]((https://dblens-client-58deca0yl-simbaaa1205-9900s-projects.vercel.app/)) · [**Report Bug**](https://github.com/simba12-gif/dblens/issues) · [**Request Feature**](https://github.com/simba12-gif/dblens/issues)
 
 </div>
 
