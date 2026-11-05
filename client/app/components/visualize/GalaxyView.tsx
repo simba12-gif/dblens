@@ -3,210 +3,282 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { SchemaGraph } from '../../lib/types';
+import { SchemaGraph, Column, TableNode } from '../../lib/types';
 
 interface GalaxyViewProps {
   graphData: SchemaGraph;
 }
 
 const PLANET_COLORS = [
-  '#FF5C8D', // pink
-  '#a855f7', // purple
-  '#22d3ee', // cyan
-  '#f97316', // orange
-  '#4ade80', // green
-  '#facc15', // yellow
-  '#e879f9', // magenta
-  '#38bdf8', // sky blue
+  '#9b9ee8', '#79c9db', '#d6ad85', '#89bda9',
+  '#c6bd92', '#b5a1ce', '#87b5dc', '#d4a0ad',
+  '#86c6bd', '#909ed0',
 ];
+
+function selectSun(graphData: SchemaGraph): TableNode {
+  const connectionCount = new Map<string, number>();
+  graphData.tables.forEach(t => connectionCount.set(t.name, 0));
+
+  graphData.edges.forEach(e => {
+    // Resolve source — could be name or id
+    const sourceTable = graphData.tables.find(
+      t => t.name === e.source || t.id === e.source
+    );
+    const targetTable = graphData.tables.find(
+      t => t.name === e.target || t.id === e.target
+    );
+    if (sourceTable) connectionCount.set(sourceTable.name, (connectionCount.get(sourceTable.name) || 0) + 1);
+    if (targetTable) connectionCount.set(targetTable.name, (connectionCount.get(targetTable.name) || 0) + 1);
+  });
+
+  const maxConnections = Math.max(...connectionCount.values());
+  const candidates = graphData.tables.filter(
+    t => connectionCount.get(t.name) === maxConnections
+  );
+
+  candidates.sort((a, b) => b.columns.length - a.columns.length);
+  return candidates[0];
+}
+
+function assignOrbits(tables: TableNode[], sunId: string): Map<string, { ring: number; angle: number }> {
+  const planets = tables.filter(t => t.id !== sunId);
+  const orbits = new Map<string, { ring: number; angle: number }>();
+
+  // Ring capacities: ring 1 = 4, ring 2 = 7, ring 3 = 10, ring 4 = 13...
+  // Fill rings in order
+  const RING_CAPACITY = (ring: number) => ring * 3 + 1;
+
+  let ring = 1;
+  let filled = 0;
+
+  planets.forEach((planet, i) => {
+    if (filled >= RING_CAPACITY(ring)) {
+      ring++;
+      filled = 0;
+    }
+    const capacity = Math.min(RING_CAPACITY(ring), planets.length - i + filled);
+    const angle = (filled / capacity) * Math.PI * 2 + ring * 0.65;
+    orbits.set(planet.id, { ring, angle });
+    filled++;
+  });
+
+  return orbits;
+}
+
+const RING_RADIUS = (ring: number) => ring * 34;
+const RING_TILT = (ring: number) => (ring % 3) * 0.08; // slight tilt variation per ring
+
+function getPosition(ring: number, angle: number): THREE.Vector3 {
+  const r = RING_RADIUS(ring);
+  const tilt = RING_TILT(ring);
+  return new THREE.Vector3(
+    r * Math.cos(angle),
+    r * Math.sin(angle) * tilt, // slight Y offset from tilt
+    r * Math.sin(angle)
+  );
+}
 
 export default function GalaxyView({ graphData }: GalaxyViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [labels, setLabels] = useState<Array<{ id: string; name: string; cols: number; x: number; y: number; visible: boolean }>>([]);
-  
+
+  const cameraTargetRef = useRef<{ position: THREE.Vector3; lookAt: THREE.Vector3; progress: number } | null>(null);
+  const cameraStartRef = useRef<{ position: THREE.Vector3; lookAt: THREE.Vector3 } | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const selectedIdRef = useRef<string | null>(null);
+
+  const [selectedTable, setSelectedTable] = useState<{
+    id: string;
+    name: string;
+    isSun: boolean;
+    color: string;
+    columns: Column[];
+    connectionCount: number;
+  } | null>(null);
+
+  const [labels, setLabels] = useState<Array<{ id: string; name: string; cols: number; x: number; y: number; visible: boolean; color: string }>>([]);
+
+  const sunTable = graphData.tables.length > 0 ? selectSun(graphData) : null;
+
   useEffect(() => {
-    if (!containerRef.current || !canvasRef.current) return;
-    
+    if (!containerRef.current || !canvasRef.current || !sunTable) return;
+
     const container = containerRef.current;
     const width = container.clientWidth;
     const height = container.clientHeight;
-    
+
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#0a1520');
-    scene.fog = new THREE.FogExp2('#0a1520', 0.008);
+    scene.fog = new THREE.FogExp2('#09111f', 0.0015);
 
     const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 1000);
-    camera.position.set(0, 40, 100);
 
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
       antialias: true,
-      alpha: false,
+      alpha: true,
     });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor('#09111f', 0);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    controlsRef.current = controls;
+
+    const orbits = assignOrbits(graphData.tables, sunTable.id);
+    const maxRing = orbits.size > 0 ? Math.max(...Array.from(orbits.values()).map(o => o.ring)) : 1;
+
+    // 8. Camera Setup
+    const maxRingRadius = RING_RADIUS(maxRing);
+    const cameraDistance = maxRingRadius + 60;
+
+    camera.position.set(0, cameraDistance * 0.95, cameraDistance);
+    camera.lookAt(0, 0, 0);
+
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 15;
+    controls.maxDistance = cameraDistance * 2.5;
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 20;
-    controls.maxDistance = 250;
     controls.autoRotate = true;
-    controls.autoRotateSpeed = 0.3;
-
-    // Table names to IDs map for edge resolution
-    const tableNameToId = new Map<string, string>();
-    graphData.tables.forEach(t => tableNameToId.set(t.name, t.id));
-
-    // Force 3D position spread
-    const positions = new Map<string, THREE.Vector3>();
-    graphData.tables.forEach((table, i) => {
-      const phi = Math.acos(-1 + (2 * i) / graphData.tables.length);
-      const theta = Math.sqrt(graphData.tables.length * Math.PI) * phi;
-      const radius = 35 + Math.random() * 20;
-      positions.set(table.id, new THREE.Vector3(
-        radius * Math.sin(phi) * Math.cos(theta),
-        radius * Math.cos(phi) * 0.7,
-        radius * Math.sin(phi) * Math.sin(theta)
-      ));
-    });
+    controls.autoRotateSpeed = 0.2;
 
     const planetMeshes: THREE.Mesh[] = [];
-    const edgeMeshes: THREE.Mesh[] = [];
+    const positions = new Map<string, THREE.Vector3>();
 
-    // Identify connected tables (using name mapping for edges)
-    const edgeCounts = new Map<string, number>();
-    graphData.tables.forEach(t => edgeCounts.set(t.id, 0));
-    graphData.edges.forEach(e => {
-      const srcId = tableNameToId.get(e.source) || e.source;
-      const tgtId = tableNameToId.get(e.target) || e.target;
-      edgeCounts.set(srcId, (edgeCounts.get(srcId) || 0) + 1);
-      edgeCounts.set(tgtId, (edgeCounts.get(tgtId) || 0) + 1);
+    // 4. Sun Mesh
+    const sunRadius = 8;
+    const sunGeo = new THREE.SphereGeometry(sunRadius, 32, 32);
+    const sunMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color('#e4c5a0'),
+      emissive: new THREE.Color('#cba475'),
+      emissiveIntensity: 0.25,
+      roughness: 0.45,
+      metalness: 0.25,
     });
-    const sortedTablesByEdges = [...edgeCounts.entries()].sort((a, b) => b[1] - a[1]);
-    const top3TableIds = new Set(sortedTablesByEdges.slice(0, 3).map(entry => entry[0]));
+    const sunMesh = new THREE.Mesh(sunGeo, sunMat);
+    sunMesh.position.set(0, 0, 0);
+    sunMesh.userData = { tableId: sunTable.id, tableName: sunTable.name, isSun: true, color: '#e4c5a0' };
+    scene.add(sunMesh);
+    planetMeshes.push(sunMesh);
+    positions.set(sunTable.id, new THREE.Vector3(0, 0, 0));
 
-    // Planets
-    graphData.tables.forEach((table, index) => {
-      const radius = Math.max(2.5, Math.min(6, 2.0 + table.columns.length * 0.25));
-      const geometry = new THREE.SphereGeometry(radius, 32, 32);
-      
-      const color = PLANET_COLORS[index % PLANET_COLORS.length];
+    // Sun corona (large transparent glow sphere)
+    const coronaMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#e4c5a0'),
+      transparent: true,
+      opacity: 0.045,
+      depthWrite: false,
+      side: THREE.BackSide,
+    });
+    scene.add(new THREE.Mesh(new THREE.SphereGeometry(sunRadius * 1.15, 32, 32), coronaMat));
 
-      const material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(color),
-        emissive: new THREE.Color(color),
-        emissiveIntensity: 2.0,
-        roughness: 0.3,
-        metalness: 0.2,
-      });
+    // Sun point light — illuminates all planets
+    const sunLight = new THREE.PointLight('#e4c5a0', 3, 300);
+    sunLight.position.set(0, 0, 0);
+    scene.add(sunLight);
 
-      const mesh = new THREE.Mesh(geometry, material);
-      const pos = positions.get(table.id)!;
-      mesh.position.copy(pos);
-      mesh.userData = { tableId: table.id, baseColor: color };
-      scene.add(mesh);
-      planetMeshes.push(mesh);
+    // Additional warm fill light
+    const fillLight = new THREE.PointLight('#E9D8C8', 1, 200);
+    fillLight.position.set(50, 30, 50);
+    scene.add(fillLight);
 
-      // Add a point light AT each planet position for local glow
-      const planetLight = new THREE.PointLight(color, 4, 30);
-      planetLight.position.copy(pos);
-      scene.add(planetLight);
+    // Ambient
+    scene.add(new THREE.AmbientLight('#ffffff', 0.4));
+    const keyLight = new THREE.DirectionalLight('#dceaff', 3);
+    keyLight.position.set(-40, 60, 35);
+    scene.add(keyLight);
 
-      // Atmosphere glow
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(color),
+    // 5. Orbital Ring Meshes
+    for (let ring = 1; ring <= maxRing; ring++) {
+      const ringRadius = RING_RADIUS(ring);
+      const ringGeo = new THREE.TorusGeometry(ringRadius, 0.045, 8, 128);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: new THREE.Color('#85A3B2'),
         transparent: true,
-        opacity: 0.4,
-        side: THREE.BackSide,
+        opacity: 0.1,
+        depthWrite: false,
       });
-      const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 2.0, 16, 16), glowMat);
-      glowMesh.position.copy(pos);
-      scene.add(glowMesh);
+      const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+      ringMesh.rotation.x = Math.PI / 2; // lay flat on XZ plane
+      ringMesh.rotation.z = RING_TILT(ring) * 0.5; // match slight tilt
+      scene.add(ringMesh);
+    }
 
-      // Rings (for top 3 most connected)
-      if (top3TableIds.has(table.id)) {
-        const ringGeo = new THREE.TorusGeometry(radius * 1.8, 0.15, 8, 48);
-        const ringMat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.8 });
-        const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-        ringMesh.position.copy(pos);
-        ringMesh.rotation.x = Math.PI / 2;
-        scene.add(ringMesh);
-      }
-    });
+    // 6. Planet Meshes
+    let colorIndex = 0;
 
-    // Relationship Paths
+    graphData.tables
+      .filter(t => t.id !== sunTable.id)
+      .forEach(table => {
+        const orbit = orbits.get(table.id)!;
+        const pos = getPosition(orbit.ring, orbit.angle);
+        positions.set(table.id, pos);
+
+        const color = PLANET_COLORS[colorIndex % PLANET_COLORS.length];
+        colorIndex++;
+
+        const radius = Math.max(2, Math.min(5, 1.8 + table.columns.length * 0.2));
+
+        const mat = new THREE.MeshStandardMaterial({
+          color: new THREE.Color(color),
+          emissive: new THREE.Color(color),
+          emissiveIntensity: 0.12,
+          roughness: 0.45,
+          metalness: 0.3,
+        });
+
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 32), mat);
+        mesh.position.copy(pos);
+        mesh.userData = { tableId: table.id, tableName: table.name, isSun: false, color };
+        scene.add(mesh);
+        planetMeshes.push(mesh);
+
+        // Atmosphere glow
+        const glowMat = new THREE.MeshBasicMaterial({
+          color: new THREE.Color(color),
+          transparent: true,
+          opacity: 0.055,
+          depthWrite: false,
+          side: THREE.BackSide,
+        });
+        const glowMesh = new THREE.Mesh(new THREE.SphereGeometry(radius * 1.15, 32, 32), glowMat);
+        glowMesh.position.copy(pos);
+        scene.add(glowMesh);
+      });
+
+    // 7. Relationship Tubes
+    const relationshipMeshes: Array<{ mesh: THREE.Mesh<THREE.TubeGeometry, THREE.MeshBasicMaterial>; source: string; target: string }> = [];
     graphData.edges.forEach(edge => {
-      const srcId = tableNameToId.get(edge.source) || edge.source;
-      const tgtId = tableNameToId.get(edge.target) || edge.target;
-      const sourcePos = positions.get(srcId);
-      const targetPos = positions.get(tgtId);
+      const sourcePos = positions.get(
+        graphData.tables.find(t => t.name === edge.source)?.id || edge.source
+      );
+      const targetPos = positions.get(
+        graphData.tables.find(t => t.name === edge.target)?.id || edge.target
+      );
       if (!sourcePos || !targetPos) return;
 
-      let outerMesh: THREE.Mesh;
-      let innerMesh: THREE.Mesh;
-      
-      if (srcId === tgtId) {
-        // Self-referential edges
-        const radius = Math.max(2.5, Math.min(6, 2.0 + (graphData.tables.find(t => t.id === srcId)?.columns.length || 0) * 0.25));
-        
-        const outerGeo = new THREE.TorusGeometry(radius + 1.5, 0.35, 8, 24);
-        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 0.4 });
-        outerMesh = new THREE.Mesh(outerGeo, outerMat);
-        outerMesh.position.copy(sourcePos).add(new THREE.Vector3(0, radius + 1.5, 0));
-        outerMesh.rotation.x = Math.PI / 4;
+      const distance = sourcePos.distanceTo(targetPos);
+      const arcHeight = distance * 0.12;
 
-        const innerGeo = new THREE.TorusGeometry(radius + 1.5, 0.08, 8, 24);
-        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 1.0 });
-        innerMesh = new THREE.Mesh(innerGeo, innerMat);
-        innerMesh.position.copy(sourcePos).add(new THREE.Vector3(0, radius + 1.5, 0));
-        innerMesh.rotation.x = Math.PI / 4;
-      } else {
-        const midPoint = new THREE.Vector3(
-          (sourcePos.x + targetPos.x) / 2,
-          (sourcePos.y + targetPos.y) / 2 + 8,
-          (sourcePos.z + targetPos.z) / 2
-        );
-        const curve = new THREE.CatmullRomCurve3([sourcePos, midPoint, targetPos]);
-        
-        const outerGeo = new THREE.TubeGeometry(curve, 20, 0.35, 8, false);
-        const outerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 0.4 });
-        outerMesh = new THREE.Mesh(outerGeo, outerMat);
+      const midPoint = new THREE.Vector3(
+        (sourcePos.x + targetPos.x) / 2,
+        (sourcePos.y + targetPos.y) / 2 + arcHeight,
+        (sourcePos.z + targetPos.z) / 2,
+      );
 
-        const innerGeo = new THREE.TubeGeometry(curve, 20, 0.08, 8, false);
-        const innerMat = new THREE.MeshBasicMaterial({ color: '#FF2A6D', transparent: true, opacity: 1.0 });
-        innerMesh = new THREE.Mesh(innerGeo, innerMat);
-      }
-      
-      outerMesh.userData = { source: srcId, target: tgtId, isOuter: true };
-      innerMesh.userData = { source: srcId, target: tgtId, isOuter: false };
-      scene.add(outerMesh);
-      scene.add(innerMesh);
-      edgeMeshes.push(outerMesh);
-      edgeMeshes.push(innerMesh);
+      const curve = new THREE.CatmullRomCurve3([sourcePos, midPoint, targetPos]);
+
+      const mesh = new THREE.Mesh(
+        new THREE.TubeGeometry(curve, 32, 0.065, 6, false),
+        new THREE.MeshBasicMaterial({ color: '#8ba8c9', transparent: true, opacity: 0.32, depthWrite: false })
+      );
+      scene.add(mesh);
+      relationshipMeshes.push({ mesh, source: edge.source, target: edge.target });
     });
 
-    // Pixel Art SVG Textures
-    const svgCrossStar = `<svg width="9" height="9" viewBox="0 0 9 9" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="0" width="1" height="9" fill="white"/><rect x="0" y="4" width="9" height="1" fill="white"/><rect x="3" y="3" width="3" height="3" fill="white"/></svg>`;
-    const svgComet = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="3" height="3" fill="#ff5722"/><rect x="2" y="2" width="3" height="3" fill="#ff9800"/><rect x="4" y="4" width="4" height="4" fill="#ffeb3b"/><rect x="8" y="8" width="6" height="6" fill="white"/><rect x="11" y="11" width="2" height="2" fill="#22d3ee"/></svg>`;
-    const svgMoon = `<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><rect x="6" y="2" width="6" height="2" fill="#facc15"/><rect x="4" y="4" width="4" height="2" fill="#facc15"/><rect x="2" y="6" width="4" height="4" fill="#facc15"/><rect x="4" y="10" width="4" height="2" fill="#facc15"/><rect x="6" y="12" width="6" height="2" fill="#facc15"/></svg>`;
-
-    const loadPixelTexture = (svg: string) => {
-      const texture = new THREE.TextureLoader().load('data:image/svg+xml;base64,' + btoa(svg));
-      texture.magFilter = THREE.NearestFilter;
-      texture.minFilter = THREE.NearestFilter;
-      return texture;
-    };
-
-    const crossStarTex = loadPixelTexture(svgCrossStar);
-    const cometTex = loadPixelTexture(svgComet);
-    const moonTex = loadPixelTexture(svgMoon);
-
-    // Stars - 3 Layers
-    const createStarLayer = (count: number, spread: number, size: number, opacity: number, color: string = '#ffffff', tex?: THREE.Texture) => {
+    // 12. Starfield
+    const createStarLayer = (count: number, spread: number, size: number, opacity: number, color: string = '#a9bbd0') => {
       const geo = new THREE.BufferGeometry();
       const pos = new Float32Array(count * 3);
       for (let i = 0; i < count; i++) {
@@ -220,67 +292,39 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
         size,
         transparent: true,
         opacity,
-        sizeAttenuation: false, // CRITICAL — keeps stars same size regardless of zoom/distance
-        map: tex || null,
-        alphaTest: tex ? 0.5 : 0,
+        sizeAttenuation: false,
+        depthWrite: false,
       });
       return new THREE.Points(geo, mat);
     };
 
-    scene.add(createStarLayer(4000, 900, 2.0, 1.0));      // bright white
-    scene.add(createStarLayer(2000, 700, 1.5, 0.8));      // slightly dimmer
-    scene.add(createStarLayer(1000, 500, 3.0, 0.6));      // larger sparse stars
-    
-    // Pixel Art Elements (Increased counts, reduced spread, larger sizes)
-    scene.add(createStarLayer(150, 600, 24, 1.0, '#ffffff', crossStarTex));
-    scene.add(createStarLayer(100, 600, 18, 1.0, '#facc15', crossStarTex)); // Yellow stars
-    scene.add(createStarLayer(100, 600, 20, 1.0, '#FF2A6D', crossStarTex)); // Pink stars
-    scene.add(createStarLayer(100, 600, 16, 1.0, '#22d3ee', crossStarTex)); // Cyan stars
-    
-    // Colored star tints for depth
-    scene.add(createStarLayer(500, 800, 1.5, 0.5, '#85A3B2'));  // blue-grey tint
-    scene.add(createStarLayer(300, 600, 2.0, 0.4, '#E9D8C8'));  // warm tint
+    // 350 stars (~35% of the pre-cleanup density), with restrained size variation.
+    scene.add(createStarLayer(260, 900, 1.25, 0.48, '#c3d1e2'));
+    scene.add(createStarLayer(75, 700, 1.75, 0.55, '#ccd9e9'));
+    scene.add(createStarLayer(15, 800, 2.25, 0.65, '#e0e8f2'));
 
-    // Nebula Backgrounds
-    const nebulaMat = new THREE.MeshBasicMaterial({
-      color: '#732553',
-      transparent: true,
-      opacity: 0.04,
-      side: THREE.BackSide,
-    });
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(300, 32, 32), nebulaMat));
-
-    const nebula2Mat = new THREE.MeshBasicMaterial({
-      color: '#1E3442',
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.BackSide,
-    });
-    scene.add(new THREE.Mesh(new THREE.SphereGeometry(250, 32, 32), nebula2Mat));
-
-    // Lighting
-    scene.add(new THREE.AmbientLight('#ffffff', 0.6));
-
-    const centerLight = new THREE.PointLight('#FF5C8D', 4, 300);
-    centerLight.position.set(0, 0, 0);
-    scene.add(centerLight);
-
-    const blueLight = new THREE.PointLight('#85A3B2', 2, 200);
-    blueLight.position.set(-50, 50, -50);
-    scene.add(blueLight);
-
-    const warmLight = new THREE.PointLight('#E9D8C8', 1.5, 150);
-    warmLight.position.set(50, -30, 50);
-    scene.add(warmLight);
-
-    // State required for the render loop and raycaster
+    // Animation & Interaction
     let animationId: number;
-    let currentSelectedTable: string | null = null;
-    
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
+    let hoveredId: string | null = null;
+    const canvas = renderer.domElement;
+    const onPointerMove = (e: PointerEvent) => {
+      const rect = canvas.getBoundingClientRect();
+      mouse.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+      raycaster.setFromCamera(mouse, camera);
+      hoveredId = raycaster.intersectObjects(planetMeshes)[0]?.object.userData.tableId ?? null;
+      canvas.style.cursor = hoveredId ? 'pointer' : 'grab';
+    };
+    const onPointerLeave = () => { hoveredId = null; canvas.style.cursor = 'grab'; };
+    canvas.addEventListener('pointermove', onPointerMove);
+    canvas.addEventListener('pointerleave', onPointerLeave);
+    let pointerStart = { x: 0, y: 0 };
+    const onPointerDown = (e: PointerEvent) => { pointerStart = { x: e.clientX, y: e.clientY }; };
+    canvas.addEventListener('pointerdown', onPointerDown);
 
     const onClick = (e: MouseEvent) => {
+      if (Math.hypot(e.clientX - pointerStart.x, e.clientY - pointerStart.y) > 5) return;
       const rect = canvasRef.current!.getBoundingClientRect();
       mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
@@ -288,18 +332,48 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
 
       const intersects = raycaster.intersectObjects(planetMeshes);
       if (intersects.length > 0) {
-        const mesh = intersects[0].object;
-        const tableId = mesh.userData.tableId;
-        currentSelectedTable = tableId;
-        setSelectedTable(tableId);
-        controls.autoRotate = false; // pause auto-rotate on selection
+        const mesh = intersects[0].object as THREE.Mesh;
+        const { tableId, tableName, isSun, color } = mesh.userData;
+        const table = graphData.tables.find(t => t.id === tableId);
+        if (!table) return;
+
+        const connCount = graphData.edges.filter(
+          e => e.source === table.name || e.source === table.id || e.target === table.name || e.target === table.id
+        ).length;
+
+        selectedIdRef.current = tableId;
+        setSelectedTable({
+          id: tableId,
+          name: tableName,
+          isSun,
+          color: color || '#FF5C8D',
+          columns: table.columns,
+          connectionCount: connCount,
+        });
+
+        controls.autoRotate = false;
+        const targetPos = mesh.position.clone();
+        const radius = (mesh.geometry as THREE.SphereGeometry).parameters?.radius || 4;
+        const flyToPos = targetPos.clone().add(new THREE.Vector3(0, radius * 3, radius * 8));
+
+        cameraTargetRef.current = {
+          position: flyToPos,
+          lookAt: targetPos,
+          progress: 0,
+        };
+        cameraStartRef.current = {
+          position: camera.position.clone(),
+          lookAt: controls.target.clone(),
+        };
       } else {
-        currentSelectedTable = null;
+        selectedIdRef.current = null;
+        cameraTargetRef.current = null;
         setSelectedTable(null);
         controls.autoRotate = true;
+        controls.target.set(0, 0, 0);
       }
     };
-    
+
     canvasRef.current.addEventListener('click', onClick);
 
     const handleResize = () => {
@@ -315,18 +389,34 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
     const updateLabels = () => {
       const w = containerRef.current!.clientWidth;
       const h = containerRef.current!.clientHeight;
-      const newLabels = graphData.tables.map(table => {
+      const occupied: Array<{ x: number; y: number; width: number }> = [];
+      const newLabels = [...graphData.tables].sort((a, b) =>
+        Number(b.id === selectedIdRef.current || b.id === hoveredId) - Number(a.id === selectedIdRef.current || a.id === hoveredId)
+      ).map(table => {
         const pos = positions.get(table.id)!.clone();
         pos.project(camera);
         const x = (pos.x * 0.5 + 0.5) * w;
-        const y = (-(pos.y * 0.5) + 0.5) * h;
+        let y = (-(pos.y * 0.5) + 0.5) * h + 26;
+        const labelWidth = Math.min(240, table.name.length * 7 + 52);
+        for (let attempt = 0; attempt < 5; attempt++) {
+          if (!occupied.some(l => Math.abs(l.x - x) < (l.width + labelWidth) / 2 + 8 && Math.abs(l.y - y) < 30)) break;
+          y += 30;
+        }
+        const visible = pos.z > -1 && pos.z < 1 && x > labelWidth / 2 && x < w - labelWidth / 2 && y < h - 24 && y > 0
+          && !occupied.some(l => Math.abs(l.x - x) < (l.width + labelWidth) / 2 + 8 && Math.abs(l.y - y) < 30);
+        if (visible) occupied.push({ x, y, width: labelWidth });
+
+        const mesh = planetMeshes.find(m => m.userData.tableId === table.id);
+        const color = mesh?.userData.color || '#FF5C8D';
+
         return {
           id: table.id,
           name: table.name,
           cols: table.columns.length,
           x,
           y,
-          visible: pos.z < 1 // z > 1 means behind camera
+          visible,
+          color
         };
       });
       setLabels(newLabels);
@@ -335,39 +425,37 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       controls.update();
+      const focusId = hoveredId ?? selectedIdRef.current;
+      const focusTable = graphData.tables.find(t => t.id === focusId);
+      for (const { mesh, source, target } of relationshipMeshes) {
+        const active = focusTable && [focusTable.id, focusTable.name].some(id => id === source || id === target);
+        mesh.material.opacity = focusTable ? (active ? 0.85 : 0.07) : 0.32;
+        mesh.material.color.set(active ? '#b9d9ef' : '#8ba8c9');
+      }
+      for (const mesh of planetMeshes) {
+        const active = mesh.userData.tableId === focusId;
+        (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = active ? 0.55 : (mesh.userData.isSun ? 0.25 : 0.12);
+        mesh.scale.lerp(new THREE.Vector3().setScalar(active ? 1.08 : 1), 0.12);
+      }
 
-      const t = Date.now() * 0.001;
-      planetMeshes.forEach((mesh, i) => {
-        const mat = mesh.material as THREE.MeshStandardMaterial;
-        if (mesh.userData.tableId === currentSelectedTable) {
-          mat.emissiveIntensity = 2.5;
-          mat.opacity = 1.0;
-          mat.transparent = false;
-        } else {
-          mat.emissiveIntensity = 1.0 + Math.sin(t + i) * 0.5;
-          if (currentSelectedTable) {
-            mat.transparent = true;
-            mat.opacity = 0.3;
-          } else {
-            mat.transparent = false;
-            mat.opacity = 1.0;
-          }
-        }
-      });
+      if (cameraTargetRef.current && cameraStartRef.current) {
+        cameraTargetRef.current.progress += 0.025; // ~1.2s at 60fps
+        const t = Math.min(cameraTargetRef.current.progress, 1);
+        const ease = t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t; // ease in-out quad
 
-      edgeMeshes.forEach(mesh => {
-        const mat = mesh.material as THREE.MeshBasicMaterial;
-        const isOuter = mesh.userData.isOuter;
-        if (currentSelectedTable) {
-          if (mesh.userData.source === currentSelectedTable || mesh.userData.target === currentSelectedTable) {
-            mat.opacity = isOuter ? 0.25 : 1.0;
-          } else {
-            mat.opacity = 0.05;
-          }
-        } else {
-          mat.opacity = isOuter ? 0.4 : 1.0;
-        }
-      });
+        camera.position.lerpVectors(
+          cameraStartRef.current.position,
+          cameraTargetRef.current.position,
+          ease
+        );
+        controls.target.lerpVectors(
+          cameraStartRef.current.lookAt,
+          cameraTargetRef.current.lookAt,
+          ease
+        );
+
+        if (t >= 1) cameraTargetRef.current = null;
+      }
 
       renderer.render(scene, camera);
       updateLabels();
@@ -378,62 +466,126 @@ export default function GalaxyView({ graphData }: GalaxyViewProps) {
     return () => {
       cancelAnimationFrame(animationId);
       window.removeEventListener('resize', handleResize);
-      if (canvasRef.current) canvasRef.current.removeEventListener('click', onClick);
+      canvas.removeEventListener('click', onClick);
+      canvas.removeEventListener('pointermove', onPointerMove);
+      canvas.removeEventListener('pointerleave', onPointerLeave);
+      canvas.removeEventListener('pointerdown', onPointerDown);
+      scene.traverse(object => {
+        if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach(material => material.dispose());
+        }
+      });
+      selectedIdRef.current = null;
+      cameraTargetRef.current = null;
       renderer.dispose();
       controls.dispose();
     };
-  }, [graphData]);
+  }, [graphData, sunTable]);
 
-  const selectedTableData = selectedTable ? graphData.tables.find(t => t.id === selectedTable) : null;
-  const selectedTableEdges = selectedTableData ? graphData.edges.filter(e => e.source === selectedTableData.name || e.target === selectedTableData.name).length : 0;
+  if (!sunTable) return null;
 
   return (
-    <div ref={containerRef} className="w-full h-full relative bg-[#0a1520] overflow-hidden">
+    <div ref={containerRef} className="w-full h-full relative overflow-hidden font-sans text-slate-200" style={{ background: 'radial-gradient(ellipse at 25% 20%, #101b2b 0%, transparent 60%), radial-gradient(ellipse at 85% 80%, #141525 0%, transparent 60%), #080e19' }}>
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full outline-none" />
-      
+
       {/* HTML Labels */}
       {labels.map(l => (
         l.visible && (
           <div
             key={l.id}
-            className="absolute font-pixel text-[8px] text-siesta-tan pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200"
-            style={{ 
-              left: l.x, 
+            className="absolute max-w-[240px] truncate rounded-md border bg-[#0b1422]/85 px-2.5 py-1 text-xs font-medium tracking-wide shadow-lg pointer-events-none -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200"
+            style={{
+              left: l.x,
               top: l.y,
-              opacity: (selectedTable && selectedTable !== l.id) ? 0.3 : 1
+              opacity: (selectedTable && selectedTable.id !== l.id) ? 0.55 : 1,
+              borderColor: selectedTable?.id === l.id ? l.color : `${l.color}30`,
+              color: '#e2e8f0'
             }}
           >
-            {l.name} <span className="text-grayzone">({l.cols})</span>
+            <span style={{ color: l.color }} className="mr-1.5">&#9679;</span>{l.name} <span className="ml-1 text-slate-400">{l.cols}</span>
           </div>
         )
       ))}
 
-      {/* HUD Overlay */}
-      <div className="absolute top-4 left-4 glass-strong p-4 rounded-lg border border-grayzone/20 pointer-events-none z-10">
-        <h2 className="font-pixel text-[10px] text-stellar-strawberry mb-2">🪐 GALAXY MODE</h2>
-        <div className="h-px bg-grayzone/20 w-full mb-2"></div>
-        <div className="font-pixel text-[8px] text-grayzone flex flex-col gap-1 uppercase">
-          <p>{graphData.tables.length} PLANETS</p>
-          <p>{graphData.edges.length} PATHS</p>
-          <div className="h-px bg-grayzone/20 w-full my-1"></div>
-          <p>Click a planet to inspect</p>
-          <p>Drag to orbit &middot; Scroll to zoom</p>
+      {/* 11. HUD Update */}
+      <div className="absolute top-4 left-4 bg-[#0b1422]/85 backdrop-blur-xl border border-white/10 rounded-2xl p-4 z-10 max-w-[220px] shadow-xl">
+        <p className="text-xs font-semibold tracking-[0.18em] text-slate-200 mb-3">SCHEMA GALAXY</p>
+        <div className="flex flex-col gap-1.5 text-xs text-slate-400 border-t border-white/10 pt-3">
+          <span><strong className="text-slate-100 font-medium">{graphData.tables.length}</strong> tables</span>
+          <span><strong className="text-slate-100 font-medium">{graphData.edges.length}</strong> relationships</span>
+          <span className="text-[#e4c5a0] mt-1 break-all">Central table: {sunTable.name}</span>
+        </div>
+        <div className="border-t border-white/10 mt-3 pt-3 flex flex-col gap-1 text-[11px] text-slate-400">
+          <span>Click a table to inspect</span>
+          <span>Drag to orbit · Scroll to zoom</span>
+          <span>Right-drag to pan</span>
         </div>
       </div>
 
-      {/* Selection Info Card */}
-      {selectedTableData && (
-        <div className="absolute top-4 right-4 glass-strong p-4 rounded-lg border border-stellar-strawberry/50 shadow-2xl pointer-events-none z-10 animate-fade-in w-64">
-          <h3 className="font-pixel text-[12px] text-siesta-tan uppercase mb-1">{selectedTableData.name}</h3>
-          <p className="font-pixel text-[8px] text-stellar-strawberry mb-3">PLANET DATA</p>
-          
-          <div className="flex justify-between items-center text-[10px] font-pixel text-grayzone mb-2">
-            <span>COLUMNS:</span>
-            <span className="text-siesta-tan">{selectedTableData.columns.length}</span>
+      {/* 10. Detail Panel */}
+      {selectedTable && (
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-[300px] max-w-[calc(100%-2rem)] max-h-[85%] overflow-y-auto bg-[#0b1422]/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-10">
+          <div
+            className="p-4 border-b border-grayzone/20"
+            style={{ borderLeft: `4px solid ${selectedTable.color}` }}
+          >
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-semibold tracking-widest" style={{ color: selectedTable.color }}>
+                {selectedTable.isSun ? 'CENTRAL TABLE · MOST CONNECTED' : 'TABLE DETAILS'}
+              </span>
+              <button
+                onClick={() => {
+                  selectedIdRef.current = null;
+                  cameraTargetRef.current = null;
+                  setSelectedTable(null);
+                  if (controlsRef.current) {
+                    controlsRef.current.autoRotate = true;
+                    controlsRef.current.target.set(0, 0, 0);
+                  }
+                }}
+                aria-label="Close table details"
+                className="rounded-md p-2 text-slate-400 hover:text-white hover:bg-white/5 focus-visible:outline-2 focus-visible:outline-sky-300 text-xs"
+              >
+                ✕
+              </button>
+            </div>
+            <h3 className="text-lg font-semibold text-slate-100 break-all">{selectedTable.name}</h3>
+            <div className="flex gap-3 mt-2">
+              <span className="text-slate-400 text-xs">{selectedTable.columns.length} columns</span>
+              <span className="text-slate-400 text-xs">{selectedTable.connectionCount} connections</span>
+            </div>
           </div>
-          <div className="flex justify-between items-center text-[10px] font-pixel text-grayzone">
-            <span>CONNECTIONS:</span>
-            <span className="text-siesta-tan">{selectedTableEdges}</span>
+
+          <div className="max-h-[320px] overflow-y-auto no-scrollbar p-2">
+            {selectedTable.columns.map((col, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-white/5 transition-colors"
+              >
+                <div className="flex items-center gap-1.5">
+                  {col.isPrimaryKey && (
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-2.5 h-2.5 text-stellar-strawberry flex-shrink-0">
+                      <path d="M12.65 10A5.99 5.99 0 0 0 7 6c-3.31 0-6 2.69-6 6s2.69 6 6 6a5.99 5.99 0 0 0 5.65-4h2.35v4h4v-4h3v-4h-9.35zM7 14c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2z"/>
+                    </svg>
+                  )}
+                  {col.isForeignKey && !col.isPrimaryKey && (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-2.5 h-2.5 text-siesta-tan/70 flex-shrink-0">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+                    </svg>
+                  )}
+                  {!col.isPrimaryKey && !col.isForeignKey && <div className="w-2.5" />}
+                  <span className={`font-mono text-xs break-all ${col.nullable ? 'text-slate-400' : 'text-slate-200'}`}>
+                    {col.name}
+                  </span>
+                </div>
+                <span className="text-slate-400 text-[11px] font-mono bg-white/5 px-1.5 py-0.5 rounded ml-2 shrink-0">
+                  {col.type.split('(')[0]}
+                </span>
+              </div>
+            ))}
           </div>
         </div>
       )}
